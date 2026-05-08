@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import inspect
 from typing import Any, Callable
 
@@ -11,6 +10,7 @@ from tensordict import TensorDict
 from rsl_rl.env import VecEnv
 
 from ..locomotion_task import OrcaLocomotionTask
+from ..scene_resolvers import resolve_scene_binding
 
 
 class OrcaRslRlVecEnv(VecEnv):
@@ -130,15 +130,9 @@ def _load_scene_binding_resolver(scene_cfg: dict[str, Any]) -> Callable[..., Any
     if not resolver_path:
         raise ValueError(
             "Task config must define `scene_binding.resolver`, e.g. "
-            "`orca_rl.tasks.velocity.config.g1.env_cfgs.resolve_scene_binding`."
+            "`g1`, `go2`, or an import path."
         )
-    module_name, _, attr_name = str(resolver_path).rpartition(".")
-    if not module_name or not attr_name:
-        raise ValueError(f"Invalid scene binding resolver path: {resolver_path!r}")
-    resolver = getattr(importlib.import_module(module_name), attr_name)
-    if not callable(resolver):
-        raise TypeError(f"Scene binding resolver is not callable: {resolver_path!r}")
-    return resolver
+    return resolve_scene_binding(resolver_path)
 
 
 def _call_scene_binding_resolver(

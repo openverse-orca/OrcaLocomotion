@@ -45,9 +45,12 @@ Old YAML config shims, robot-named VecEnv adapters, and robot-named task wrapper
 
 - `run_train`, `run_play`, and `run_eval` keep using the same loader path.
 - Adapter package exports are lazy, so importing the factory does not load `rsl_rl` until an env is actually created.
+- User-facing imports are now available from `orca_rl`, for example
+  `from orca_rl import load_task_and_train_cfg, make_locomotion_vec_env`.
+- Built-in velocity config factories can be imported from `orca_rl.tasks.velocity.config`.
 - G1 and GO2 now share one config-driven `OrcaRslRlVecEnv` and one `OrcaLocomotionTask` runtime.
-- Robot-specific scene binding is selected by `scene_binding.resolver` in each task config. G1/GO2 now point at local
-  `resolve_scene_binding` functions inside their own `env_cfgs.py` files.
+- Robot-specific scene binding is selected by `scene_binding.resolver` in each task config. Built-ins use short aliases:
+  `g1` and `go2`. Dotted import paths are still supported for custom robots.
 - Python config loading now supports `TASK_CONFIG_FACTORY` and `RL_CONFIG_FACTORY`.
 - YAML locomotion config loading was removed from the active path; canonical configs are Python cfg files only.
 - G1 still uses the discovered asset path:
@@ -107,7 +110,8 @@ Also checked:
   requiring a live OrcaLab server.
 - Removed the obsolete `orca_rl/configs/` compatibility directory and old VecEnv import shims.
 - Removed robot-named task wrappers. Adding another flat-velocity robot should be config-package work: define
-  `env_cfgs.py`, `rl_cfg.py`, and a local `resolve_scene_binding` when the asset naming differs.
+  `env_cfgs.py`, `rl_cfg.py`, and either reuse a resolver alias or add a custom dotted resolver path when the asset
+  naming differs.
 - Removed the former examples-scoped package path. Runtime entrypoints are now `orca_rl.run_train`, `orca_rl.run_play`,
   and `orca_rl.run_eval`.
 

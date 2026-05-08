@@ -75,7 +75,7 @@ def unitree_g1_flat_env_cfg(play: bool = False) -> LocomotionEnvCfg:
     )
 
     cfg.scene_binding = {
-        "resolver": "orca_rl.tasks.velocity.config.g1.env_cfgs.resolve_scene_binding",
+        "resolver": "g1",
         "min_count": 1,
         "max_count": 1,
         "spawn_if_missing": True,
@@ -97,14 +97,6 @@ def unitree_g1_flat_env_cfg(play: bool = False) -> LocomotionEnvCfg:
         cfg.observations["actor"].enable_corruption = False
 
     return cfg
-
-
-def resolve_scene_binding(**kwargs):
-    """Resolve or publish the G1 scene instance for this task config."""
-
-    from orca_rl.rsl_env.scene_binding import resolve_g1_scene_binding
-
-    return resolve_g1_scene_binding(**kwargs)
 
 
 TASK_CONFIG_FACTORY = unitree_g1_flat_env_cfg

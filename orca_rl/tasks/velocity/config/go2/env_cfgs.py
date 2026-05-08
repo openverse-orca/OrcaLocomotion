@@ -58,7 +58,7 @@ def unitree_go2_flat_env_cfg(play: bool = False) -> LocomotionEnvCfg:
     )
 
     cfg.scene_binding = {
-        "resolver": "orca_rl.tasks.velocity.config.go2.env_cfgs.resolve_scene_binding",
+        "resolver": "go2",
         "min_count": 1,
         "max_count": 1,
     }
@@ -70,14 +70,6 @@ def unitree_go2_flat_env_cfg(play: bool = False) -> LocomotionEnvCfg:
         cfg.observations["actor"].enable_corruption = False
 
     return cfg
-
-
-def resolve_scene_binding(**kwargs):
-    """Resolve the GO2 scene instance for this task config."""
-
-    from orca_rl.rsl_env.scene_binding import resolve_go2_scene_binding
-
-    return resolve_go2_scene_binding(**kwargs)
 
 
 TASK_CONFIG_FACTORY = unitree_go2_flat_env_cfg

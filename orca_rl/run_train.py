@@ -52,8 +52,7 @@ def main() -> None:
     try:
         from rsl_rl.runners import OnPolicyRunner
 
-        from orca_rl.diagnostics import print_runtime_summary
-        from orca_rl.rsl_env import make_locomotion_vec_env
+        from orca_rl import make_locomotion_vec_env, print_runtime_summary
     except ImportError as exc:
         raise explain_missing_runtime_dependency(exc) from exc
 

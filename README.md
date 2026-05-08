@@ -14,8 +14,10 @@ Install the runtime dependencies inside the OrcaLab environment:
 
 ```bash
 pip install -r requirements.txt
-pip install -r orca_rl/requirements.txt
 ```
+
+When working from the original OrcaPlayground tree instead of the standalone `orca_rl` repository, use
+`pip install -r orca_rl/requirements.txt`.
 
 Before launching GO2, place exactly one GO2 actor in the OrcaLab scene. The scene binding requires the GO2 joints,
 actuators, contact sites, foot bodies, and touch sensors to match the asset suffixes used by
@@ -28,9 +30,17 @@ The canonical task configs follow an mjlab/IsaacLab-style Python layout:
 - `tasks/velocity/config/go2/env_cfgs.py`
 - `tasks/velocity/config/go2/rl_cfg.py`
 
+Programmatic use is exposed through the top-level package:
+
+```python
+from orca_rl import load_task_and_train_cfg, make_locomotion_vec_env
+from orca_rl.tasks.velocity.config import unitree_g1_flat_env_cfg, unitree_go2_flat_env_cfg
+```
+
 The Orca runtime side is robot-neutral: `rsl_env/adapters/vecenv.py` creates the RSL-RL VecEnv, and
 `rsl_env/locomotion_task.py` runs one bound robot instance. Robot-specific asset discovery is selected through each
-config's local `resolve_scene_binding` function.
+config's `scene_binding.resolver` alias. Built-in aliases are `g1` and `go2`; custom import paths are still supported
+for new assets.
 
 When train/play/eval starts, Orca RL prints a terminal runtime summary with the selected device and GPU, observation
 dimensions, action dimensions, reward terms, termination terms, commands, domain randomization, and scene binding.
