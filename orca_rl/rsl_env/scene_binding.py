@@ -4,12 +4,12 @@ from copy import deepcopy
 from dataclasses import dataclass
 import time
 
-from envs.common.model_scanner import (
+from .model_scanner import (
     build_suffix_template,
     require_complete_matches,
     scan_scene_for_template,
 )
-from envs.legged_gym.robot_config.go2_config import Go2Config
+from .robot_configs import GO2_CONFIG
 
 
 @dataclass(frozen=True)
@@ -251,7 +251,7 @@ def resolve_go2_scene_binding(
     min_count: int = 1,
     max_count: int = 1,
 ) -> SceneBinding:
-    robot_config = deepcopy(Go2Config)
+    robot_config = deepcopy(GO2_CONFIG)
     template = build_suffix_template(
         model_name="go2",
         joints=[robot_config["base_joint_name"], *list(robot_config["leg_joint_names"])],

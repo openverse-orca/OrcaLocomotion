@@ -19,7 +19,7 @@ pip install -r orca_rl/requirements.txt
 
 Before launching GO2, place exactly one GO2 actor in the OrcaLab scene. The scene binding requires the GO2 joints,
 actuators, contact sites, foot bodies, and touch sensors to match the asset suffixes used by
-`envs.legged_gym.robot_config.go2_config`.
+`orca_rl.rsl_env.robot_configs.GO2_CONFIG`.
 
 The canonical task configs follow an mjlab/IsaacLab-style Python layout:
 
