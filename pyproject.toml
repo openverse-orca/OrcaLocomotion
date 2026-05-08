@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orca-rl"
+version = "0.1.0"
+description = "Standalone RSL-RL bridge package for OrcaLab and OrcaGym."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "BenHuHuan", email = "benhu1337@gmail.com" }]
+dependencies = [
+  "rsl-rl-lib>=5.2.0,<5.4.0",
+  "torch>=2.6.0",
+  "tensordict>=0.7.0",
+  "onnx>=1.15.0",
+  "onnxscript>=0.5.4",
+  "tensorboard>=2.14.0",
+  "wandb>=0.17.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[tool.setuptools.packages.find]
+include = ["orca_rl*"]
+
