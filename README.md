@@ -14,6 +14,7 @@ Install the runtime dependencies inside the OrcaLab environment:
 
 ```bash
 pip install -r requirements.txt
+pip install -r orca_rl/requirements.txt
 ```
 
 Before launching GO2, place exactly one GO2 actor in the OrcaLab scene. The scene binding requires the GO2 joints,
@@ -30,6 +31,9 @@ The canonical task configs follow an mjlab/IsaacLab-style Python layout:
 The Orca runtime side is robot-neutral: `rsl_env/adapters/vecenv.py` creates the RSL-RL VecEnv, and
 `rsl_env/locomotion_task.py` runs one bound robot instance. Robot-specific asset discovery is selected through each
 config's local `resolve_scene_binding` function.
+
+When train/play/eval starts, Orca RL prints a terminal runtime summary with the selected device and GPU, observation
+dimensions, action dimensions, reward terms, termination terms, commands, domain randomization, and scene binding.
 
 For G1, use `orca_rl/tasks/velocity/config/g1/env_cfgs.py`. It scans the existing G1 scene first; if no complete
 G1 is found, it tries to publish `g1_000` from:

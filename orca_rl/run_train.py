@@ -52,6 +52,7 @@ def main() -> None:
     try:
         from rsl_rl.runners import OnPolicyRunner
 
+        from orca_rl.diagnostics import print_runtime_summary
         from orca_rl.rsl_env import make_locomotion_vec_env
     except ImportError as exc:
         raise explain_missing_runtime_dependency(exc) from exc
@@ -69,6 +70,15 @@ def main() -> None:
     except ImportError as exc:
         raise explain_missing_runtime_dependency(exc) from exc
     try:
+        print_runtime_summary(
+            mode="train",
+            env=env,
+            task_cfg=task_cfg,
+            runner_cfg=train_cfg,
+            device=device,
+            log_dir=log_dir,
+            iterations=iterations,
+        )
         runner = OnPolicyRunner(env, train_cfg, log_dir=str(log_dir), device=device)
         runner.add_git_repo_to_log(str(log_dir.parents[2]))
         if args.resume:

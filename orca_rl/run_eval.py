@@ -34,6 +34,7 @@ def main() -> None:
     try:
         import torch
 
+        from orca_rl.diagnostics import print_runtime_summary
         from orca_rl.rsl_env import make_locomotion_vec_env
         from orca_rl.rsl_env.runtime_policy import load_inference_runner
     except ImportError as exc:
@@ -47,6 +48,14 @@ def main() -> None:
     except ImportError as exc:
         raise explain_missing_runtime_dependency(exc) from exc
     try:
+        print_runtime_summary(
+            mode="eval",
+            env=env,
+            task_cfg=task_cfg,
+            runner_cfg=train_cfg,
+            device=device,
+            checkpoint=checkpoint,
+        )
         _runner, policy = load_inference_runner(env, train_cfg, checkpoint, log_dir=None, device=device)
         obs = env.get_observations().to(device)
         total_reward = torch.zeros(env.num_envs, device=env.device)

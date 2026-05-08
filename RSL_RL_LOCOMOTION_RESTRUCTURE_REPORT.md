@@ -57,6 +57,8 @@ Old YAML config shims, robot-named VecEnv adapters, and robot-named task wrapper
 - Rewards, observations, commands, events, and terminations are declared as MDP-style terms in Python cfg objects, then
   converted to the legacy dict shape consumed by the current Orca RSL-RL runtime.
 - RSL-RL checkpoint alias saving and W&B CLI flags are unchanged.
+- Train/play/eval now print an IsaacLab/MJLab-style terminal runtime summary before policy construction or inference:
+  device/GPU, action and observation dimensions, rewards, terminations, commands, domain randomization, and scene binding.
 - `run_train`, `run_play`, and `run_eval` default `--config` values now point at the canonical GO2 config path.
 - `.orcalab/config.toml` now points the menu entries at the canonical task config paths.
 
@@ -101,6 +103,8 @@ Also checked:
 - `python -m orca_rl.run_eval --help` in the OrcaLab conda env.
 - Importing `make_locomotion_vec_env` with the system Python does not eagerly require the RSL-RL runtime.
 - `.orcalab/config.toml` parses and points RSL-RL menu entries at `orca_rl/tasks/velocity/config/{g1,go2}/env_cfgs.py`.
+- `orca_rl.diagnostics.print_runtime_summary` was exercised with a fake env to verify terminal formatting without
+  requiring a live OrcaLab server.
 - Removed the obsolete `orca_rl/configs/` compatibility directory and old VecEnv import shims.
 - Removed robot-named task wrappers. Adding another flat-velocity robot should be config-package work: define
   `env_cfgs.py`, `rl_cfg.py`, and a local `resolve_scene_binding` when the asset naming differs.
