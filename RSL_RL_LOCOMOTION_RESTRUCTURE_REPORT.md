@@ -203,3 +203,83 @@ python -m orca_rl.terrains.export \
   --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
   --out generated_terrains/go2_rough.obj
 ```
+
+## Rough Environment Audit
+
+Current rough velocity configs are usable as a config/runtime scaffold, but not yet as a physically correct rough
+terrain training environment inside OrcaLab. The important distinction is:
+
+- Observation terrain is active.
+- Physics terrain is not active until OrcaLab allows local mesh/asset import or exposes a runtime terrain publish API.
+
+Working now:
+
+- `unitree_g1_rough_env_cfg` and `unitree_go2_rough_env_cfg` load through the `file.py:factory_name` selector.
+- RSL-RL runner configs switch to `g1_rough_velocity` / `go2_rough_velocity` and 2500 default iterations.
+- `orca_rl.terrains.generator` creates procedural heightfields for:
+  - `random_uniform`
+  - `pyramid_stairs`
+  - `discrete_obstacles`
+  - `wave`
+- Generated heightfields support:
+  - bilinear `height_at(x, y)` sampling
+  - yaw-aware local height scans around the base
+  - mesh conversion
+  - OBJ export through `python -m orca_rl.terrains.export`
+- `orca_rl.rsl_env.terrain_runtime` is created during env setup and feeds rough height scan observations from the
+  generated heightfield.
+- Rough policy and privileged observations include the 187-dimensional height scan. This is no longer zero-filled when
+  terrain scan is configured.
+- Flat locomotion runtime remains usable:
+  - residual joint-position action mapping
+  - bounded action clipping
+  - PD torque computation
+  - command sampling
+  - base angular velocity / gravity / command / joint state / last action observations
+  - privileged base linear velocity, foot state, torque, and randomization observations
+  - flat velocity tracking reward terms
+  - base height / tilt / base-contact terminations
+- `terrain.physics_enabled` and `terrain.export_path` are present as future integration hooks.
+
+Partially working / metadata-only:
+
+- `RayCasterCfg` is not an OrcaLab raycaster yet. It describes scan shape and frame metadata, while the runtime scan is
+  computed from the generated heightfield in Python.
+- `ContactSensorCfg` and `nonfoot_ground_contact` are metadata. Actual contact checks still use OrcaGym contact queries
+  and the existing robot contact/body names.
+- `randomize_friction` and `randomize_body_mass` currently sample values and expose them to privileged observations, but
+  they do not mutate OrcaLab physics parameters yet.
+- `randomize_terrain` exists as an MDP/event declaration, but terrain is generated once at environment setup. Reset-time
+  terrain tile switching is not implemented.
+- `terrain_levels` exists as curriculum metadata, but there is no terrain difficulty update loop yet.
+- Rough rewards declared in config but not computed by `FlatVelocityReward` yet:
+  - `feet_air_time`
+  - `foot_clearance`
+  - `body_ang_vel_l2`
+  - `stand_still`
+  - `joint_deviation_l1`
+- `illegal_contact` is declared as a termination term, but `TerminationManager` currently only enforces height, tilt,
+  invalid state, and configured base contact.
+
+Not working yet / blocked by OrcaLab integration:
+
+- Generated OBJ/heightfield is not inserted into the OrcaLab scene.
+- Robot foot collision still occurs against whatever ground exists in the current OrcaLab scene, usually flat ground.
+- Height scan and physical collision can disagree until the generated mesh is imported/published into OrcaLab.
+- `terrain.physics_enabled=True` should not be treated as complete rough physics until mesh import/publish is wired.
+- The runtime does not yet verify that the exported/imported terrain mesh exactly matches the generated heightfield used
+  for height scans.
+
+Missing implementation checklist:
+
+- Add an OrcaLab terrain publisher/importer that consumes `HeightField.to_mesh()` or a native heightfield payload.
+- Attach the imported terrain mesh to the scene with collision enabled and material/friction parameters from
+  `TerrainCfg`.
+- Make `terrain.physics_enabled=True` fail loudly if no terrain collision backend is available.
+- Replace Python heightfield scan with OrcaLab raycast only if OrcaLab can raycast against the same imported terrain;
+  otherwise keep Python scan as the source of truth.
+- Apply friction and base-mass randomization to OrcaLab physics, not only privileged observations.
+- Implement reset-time terrain tile selection and terrain curriculum progression.
+- Implement rough reward terms in `FlatVelocityReward` or split reward managers by task terrain type.
+- Implement `illegal_contact` using the declared `nonfoot_ground_contact` sensor/contact selector.
+- Add a visual/debug command that exports the terrain mesh and a small image/array summary of the sampled height scan.
