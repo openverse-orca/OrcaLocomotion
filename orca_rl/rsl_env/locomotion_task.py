@@ -13,6 +13,7 @@ from .math_utils import quat_mul_wxyz, yaw_quat_wxyz
 from .obs_builder import LocomotionObservationBuilder, LocomotionTaskState, ObservationConfig
 from .randomization import DomainRandomizer, RandomizationConfig, RandomizationState
 from .reward_manager import FlatVelocityReward, RewardConfig
+from .terrain_runtime import TerrainRuntime
 from .termination_manager import TerminationManager, TerminationConfig
 
 
@@ -162,6 +163,7 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
         self.termination_manager = TerminationManager(TerminationConfig(**self.cfg.get("termination", {})))
         self.command_sampler = FlatVelocityCommandSampler(CommandConfig(**self.cfg.get("commands", {})), self.rng)
         self.randomizer = DomainRandomizer(RandomizationConfig(**self.cfg.get("randomization", {})), self.rng)
+        self.terrain_runtime = TerrainRuntime.from_task_cfg(self.cfg, self.rng)
         self.command_resample_steps = max(
             1,
             int(round(float(self.cfg.get("commands", {}).get("resample_time_s", 4.0)) / self.control_dt)),
@@ -243,6 +245,8 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
             base_qpos[:2] += self.rng.uniform(-xy_noise, xy_noise, size=2)
         if "base_height" in reset_cfg:
             base_qpos[2] = float(reset_cfg["base_height"])
+            if self.terrain_runtime.physics_enabled:
+                base_qpos[2] += self.terrain_runtime.height_at(float(base_qpos[0]), float(base_qpos[1]))
         if yaw_noise > 0.0:
             yaw_delta = self.rng.uniform(-yaw_noise, yaw_noise)
             base_qpos[3:7] = quat_mul_wxyz(base_qpos[3:7], yaw_quat_wxyz(yaw_delta))
@@ -294,6 +298,7 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
             foot_contacts=self._query_foot_contacts(),
             friction_scale=self.randomization_state.friction_scale,
             base_mass_delta=self.randomization_state.base_mass_delta,
+            height_scan=self.terrain_runtime.scan(base_qpos[:3], base_qpos[3:7]),
         )
 
     def _query_foot_positions(self) -> np.ndarray:

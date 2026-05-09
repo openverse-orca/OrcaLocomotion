@@ -23,6 +23,7 @@ class LocomotionTaskState:
     foot_contacts: np.ndarray
     friction_scale: float
     base_mass_delta: float
+    height_scan: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ class LocomotionObservationBuilder:
         projected_gravity = rot.T @ np.array([0.0, 0.0, -1.0], dtype=np.float64)
 
         command_scale = np.asarray(self.cfg.command_scale, dtype=np.float64)
-        height_scan = self._height_scan()
+        height_scan = self._height_scan(state.height_scan)
         policy_terms = [
             base_ang_vel_body * self.cfg.ang_vel_scale,
             projected_gravity,
@@ -99,8 +100,13 @@ class LocomotionObservationBuilder:
         scale = 0.01 * float(self.cfg.noise_level)
         return self.rng.uniform(-scale, scale, size=shape).astype(np.float32)
 
-    def _height_scan(self) -> np.ndarray:
+    def _height_scan(self, samples: np.ndarray) -> np.ndarray:
         dim = max(0, int(self.cfg.height_scan_dim))
         if dim == 0:
             return np.zeros(0, dtype=np.float64)
-        return np.zeros(dim, dtype=np.float64) * float(self.cfg.height_scan_scale)
+        samples = np.asarray(samples, dtype=np.float64).reshape(-1)
+        if samples.size == dim:
+            return samples
+        padded = np.zeros(dim, dtype=np.float64)
+        padded[: min(dim, samples.size)] = samples[:dim]
+        return padded

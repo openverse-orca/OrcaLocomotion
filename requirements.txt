@@ -1,4 +1,5 @@
 rsl-rl-lib>=5.2.0,<5.4.0
+numpy>=1.26.0
 torch>=2.6.0
 tensordict>=0.7.0
 onnx>=1.15.0

@@ -99,6 +99,8 @@ def print_runtime_summary(
     terrain = task_cfg.get("terrain") or {}
     if isinstance(terrain, Mapping):
         _print_kv("type", terrain.get("terrain_type"), indent=2)
+        _print_kv("physics_enabled", terrain.get("physics_enabled"), indent=2)
+        _print_kv("export_path", terrain.get("export_path"), indent=2)
         generator = terrain.get("terrain_generator")
         if isinstance(generator, Mapping):
             _print_kv("generator", f"{generator.get('num_rows')}x{generator.get('num_cols')}", indent=2)

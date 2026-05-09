@@ -74,14 +74,19 @@ Old YAML config shims, robot-named VecEnv adapters, and robot-named task wrapper
   terrain randomization, height scan observation, foot height observation, foot air time, foot clearance, stand-still,
   body angular velocity, joint deviation, illegal contact, and mean action acceleration metric.
 - Terrain and sensor config metadata now has first-class package homes. `orca_rl.terrains` describes plane/generator
-  terrain metadata; `orca_rl.sensor` describes contact sensors and ray-cast terrain scans. The current Orca runtime
-  consumes this for config, diagnostics, and rough observation dimensions. Actual terrain asset generation remains an
-  OrcaLab scene/asset concern.
+  terrain metadata; `orca_rl.sensor` describes contact sensors and ray-cast terrain scans.
+- `orca_rl.terrains.generator` now generates procedural heightfields for random-uniform, pyramid-stairs,
+  discrete-obstacle, and wave terrain. It can sample heights for policy height scans and convert the heightfield to an
+  OBJ mesh.
+- `orca_rl.rsl_env.terrain_runtime` now creates the procedural terrain at env setup and feeds height scan observations
+  from the generated heightfield. Physics collision is gated by `terrain.physics_enabled` and defaults to false because
+  OrcaLab currently blocks local mesh/asset import in this environment.
 - G1 and GO2 both provide flat and rough velocity config factories:
   `unitree_g1_flat_env_cfg`, `unitree_g1_rough_env_cfg`, `unitree_go2_flat_env_cfg`, and
   `unitree_go2_rough_env_cfg`.
-- Rough configs add a 187-ray height scan placeholder to policy and privileged observations. It is currently zero-filled
-  until an OrcaLab terrain ray query is wired in; this keeps model shapes and task wiring ready for the terrain backend.
+- Rough configs add a 187-ray height scan to policy and privileged observations. The scan now comes from the generated
+  heightfield. Once OrcaLab mesh import/publish is enabled, the same generated mesh should be inserted into the scene so
+  observations and collisions share the same terrain.
 - RSL-RL checkpoint alias saving and W&B CLI flags are unchanged.
 - Train/play/eval now print an IsaacLab/MJLab-style terminal runtime summary before policy construction or inference:
   device/GPU, action and observation dimensions, rewards, terminations, commands, domain randomization, terrain, sensors,
@@ -140,6 +145,8 @@ Also checked:
 - `python -m orca_rl.run_train --help` in the OrcaLab conda env.
 - `python -m orca_rl.run_play --help` in the OrcaLab conda env.
 - `python -m orca_rl.run_eval --help` in the OrcaLab conda env.
+- Procedural terrain generation with a small test config, including height sampling and OBJ export.
+- Rough observation dimensions with generated height scan: flat GO2 policy obs is 45; rough GO2 policy obs is 232.
 - Importing `make_locomotion_vec_env` with the system Python does not eagerly require the RSL-RL runtime.
 - `.orcalab/config.toml` parses and points RSL-RL menu entries at `orca_rl/tasks/velocity/config/{g1,go2}/env_cfgs.py`.
 - `orca_rl.diagnostics.print_runtime_summary` was exercised with a fake env to verify terminal formatting without
@@ -187,4 +194,12 @@ G1 rough training:
 python -m orca_rl.run_train \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg \
   --remote localhost:50051
+```
+
+Export a generated rough terrain mesh:
+
+```bash
+python -m orca_rl.terrains.export \
+  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
+  --out generated_terrains/go2_rough.obj
 ```

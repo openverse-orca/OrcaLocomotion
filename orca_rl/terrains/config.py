@@ -25,6 +25,7 @@ class TerrainGeneratorCfg:
     num_rows: int = 8
     num_cols: int = 8
     size: tuple[float, float] = (8.0, 8.0)
+    horizontal_scale: float = 0.10
     border_width: float = 2.0
     curriculum: bool = True
     sub_terrains: tuple[SubTerrainCfg, ...] = (
@@ -39,6 +40,7 @@ class TerrainGeneratorCfg:
             "num_rows": self.num_rows,
             "num_cols": self.num_cols,
             "size": self.size,
+            "horizontal_scale": self.horizontal_scale,
             "border_width": self.border_width,
             "curriculum": self.curriculum,
             "sub_terrains": tuple(item.to_dict() for item in self.sub_terrains),
@@ -52,6 +54,8 @@ class TerrainCfg:
     static_friction: float = 0.8
     dynamic_friction: float = 0.8
     restitution: float = 0.0
+    physics_enabled: bool = False
+    export_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -60,4 +64,6 @@ class TerrainCfg:
             "static_friction": self.static_friction,
             "dynamic_friction": self.dynamic_friction,
             "restitution": self.restitution,
+            "physics_enabled": self.physics_enabled,
+            "export_path": self.export_path,
         }

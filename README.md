@@ -85,6 +85,17 @@ python -m orca_rl.run_train \
 
 The `file.py:factory_name` form is the development-mode task selector until the later registry layer lands.
 
+Export the generated rough terrain mesh for later OrcaLab import:
+
+```bash
+python -m orca_rl.terrains.export \
+  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
+  --out generated_terrains/go2_rough.obj
+```
+
+The rough task already generates a heightfield and uses it for height-scan observations. Physics collision remains
+disabled until OrcaLab allows local mesh/asset import or exposes a runtime terrain publish API.
+
 Train G1 with W&B logging:
 
 ```bash
