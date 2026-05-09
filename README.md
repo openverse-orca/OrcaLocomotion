@@ -96,6 +96,39 @@ python -m orca_rl.terrains.export \
 The rough task already generates a heightfield and uses it for height-scan observations. Physics collision remains
 disabled until OrcaLab allows local mesh/asset import or exposes a runtime terrain publish API.
 
+## Backend Capability Gaps
+
+OrcaLab runs MuJoCo behind a gRPC service, so client-side Python cannot safely mutate remote `mjModel` parameters unless
+the server exposes explicit APIs. The following items are intentionally not marked complete.
+
+Requires OrcaLab server/gRPC changes:
+
+- **Rough terrain collision**: needs `AddCollisionMesh`, `ReplaceTerrainMesh`, native heightfield upload, or scene asset
+  import/publish support. Required input from `orca_rl`: generated vertices/faces or heightfield grid, friction, pose,
+  and collision group/material settings.
+- **Runtime terrain switching**: needs a server API to swap terrain mesh/heightfield or activate a terrain tile without
+  restarting the whole simulation. Required for reset-time terrain randomization and curriculum.
+- **Friction randomization**: needs server-side `SetGeomFriction` or equivalent for named terrain/foot geoms. Client-only
+  writes to a local model mirror are not enough.
+- **Body-mass randomization**: needs server-side `SetBodyMass`, and ideally `SetBodyInertia` / `SetBodyCOM`, for named
+  robot bodies.
+- **Other physics randomization**: actuator gains, damping, armature, joint friction, solver params, and contact params
+  need explicit remote setters if we want IsaacLab-style domain randomization.
+- **True OrcaLab raycaster**: only useful if it raycasts against the same imported terrain mesh/heightfield. Until then,
+  Python heightfield sampling should remain the source of truth for height scan observations.
+- **Reliable non-foot contact sensors**: needs server-side contact filtering or force reporting by named geom/body pairs
+  if we want `illegal_contact` to match the declared `ContactSensorCfg`.
+
+Can be finished inside `orca_rl` after those APIs exist:
+
+- Implement the terrain publisher/importer backend and make `terrain.physics_enabled=True` fail loudly when unavailable.
+- Apply sampled friction/body-mass randomization through the new remote setters.
+- Wire reset-time terrain tile selection and terrain curriculum progression.
+- Compute rough rewards currently declared but not active: `feet_air_time`, `foot_clearance`, `body_ang_vel_l2`,
+  `stand_still`, and `joint_deviation_l1`.
+- Implement `illegal_contact` termination from the declared non-foot contact selector.
+- Add a debug command that exports the terrain mesh plus a compact height-scan preview for visual inspection.
+
 Train G1 with W&B logging:
 
 ```bash
