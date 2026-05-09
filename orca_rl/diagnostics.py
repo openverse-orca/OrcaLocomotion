@@ -95,6 +95,29 @@ def print_runtime_summary(
     for name, term in _sorted_terms(randomization_events):
         print(f"  - event {name}: mode={term.get('mode')} func={_short_func(term.get('func', ''))}")
 
+    print("\n[Terrain]")
+    terrain = task_cfg.get("terrain") or {}
+    if isinstance(terrain, Mapping):
+        _print_kv("type", terrain.get("terrain_type"), indent=2)
+        generator = terrain.get("terrain_generator")
+        if isinstance(generator, Mapping):
+            _print_kv("generator", f"{generator.get('num_rows')}x{generator.get('num_cols')}", indent=2)
+            _print_kv("curriculum", generator.get("curriculum"), indent=2)
+    else:
+        _print_kv("type", terrain, indent=2)
+
+    print("\n[Sensors]")
+    sensors = task_cfg.get("sensors", {})
+    for name, sensor in sorted(sensors.items()):
+        if isinstance(sensor, Mapping):
+            print(f"  - {name}: {sensor.get('name', name)}")
+        else:
+            print(f"  - {name}: {sensor}")
+
+    print("\n[Curriculum]")
+    for name, term in _sorted_terms(manager_terms.get("curriculum", {})):
+        print(f"  - {name}: func={_short_func(term.get('func', ''))}{_compact_params(term.get('params', {}))}")
+
     print("\n[Scene]")
     scene_binding = task_cfg.get("scene_binding", {})
     _print_kv("resolver", scene_binding.get("resolver"), indent=2)
@@ -178,4 +201,3 @@ def _print_kv(key: str, value: Any, indent: int = 0) -> None:
 
 def _print_bar() -> None:
     print("=" * 80)
-

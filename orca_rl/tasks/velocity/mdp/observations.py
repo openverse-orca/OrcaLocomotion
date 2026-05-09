@@ -28,3 +28,10 @@ def last_action():
 def generated_commands():
     """Current sampled velocity command."""
 
+
+def height_scan():
+    """Terrain height samples around the base frame."""
+
+
+def foot_height():
+    """Foot heights in the world frame."""

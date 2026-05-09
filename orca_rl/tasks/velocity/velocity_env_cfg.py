@@ -11,6 +11,8 @@ from orca_rl.tasks.velocity.config_types import (
     TermCfg,
     UniformVelocityCommandCfg,
 )
+from orca_rl.sensor import ContactMatchCfg, ContactSensorCfg, GridPatternCfg, RayCasterCfg
+from orca_rl.terrains import TerrainCfg, TerrainGeneratorCfg
 
 
 def make_flat_velocity_env_cfg(
@@ -57,6 +59,17 @@ def make_flat_velocity_env_cfg(
             "frame_skip": frame_skip,
             "decimation": decimation,
             "render_mode": render_mode,
+        },
+        terrain=TerrainCfg(terrain_type="plane"),
+        sensors={
+            "feet_ground_contact": ContactSensorCfg(
+                name="feet_ground_contact",
+                primary=ContactMatchCfg(mode="body", pattern="feet", entity="robot"),
+                secondary=ContactMatchCfg(mode="body", pattern="terrain", entity="terrain"),
+                fields=("found",),
+                reduce="none",
+                track_air_time=True,
+            ),
         },
         episode={"length_s": 20.0},
         actions={
@@ -159,6 +172,10 @@ def make_flat_velocity_env_cfg(
                 params={"base_mass_delta_range": (-0.5, 1.5)},
             ),
         },
+        curriculum={},
+        metrics={
+            "mean_action_acc": TermCfg(func=mdp.mean_action_acc),
+        },
         reset={
             "base_height": base_height,
             "xy_noise": 0.05,
@@ -177,3 +194,119 @@ def make_flat_velocity_env_cfg(
         export={"enabled": True, "jit": True, "onnx": True},
     )
 
+
+def make_rough_velocity_env_cfg(
+    *,
+    name: str,
+    robot: str,
+    rsl_rl_config: str,
+    seed: int,
+    time_step: float,
+    frame_skip: int,
+    decimation: int,
+    render_mode: str,
+    action_safety_scale: float,
+    action_max_delta: tuple[float, ...],
+    command_ranges: UniformVelocityCommandCfg.Ranges,
+    base_height: float,
+    min_base_height: float,
+    max_base_height: float,
+    max_tilt_rad: float,
+    reward_scales: dict[str, float],
+    terrain_scan: GridPatternCfg | None = None,
+) -> LocomotionEnvCfg:
+    """Create a rough-terrain velocity config with mjlab-style terrain/sensor metadata."""
+
+    scan_pattern = terrain_scan or GridPatternCfg(resolution=0.10, size=(1.6, 1.0))
+    cfg = make_flat_velocity_env_cfg(
+        name=name,
+        robot=robot,
+        rsl_rl_config=rsl_rl_config,
+        seed=seed,
+        time_step=time_step,
+        frame_skip=frame_skip,
+        decimation=decimation,
+        render_mode=render_mode,
+        action_safety_scale=action_safety_scale,
+        action_max_delta=action_max_delta,
+        command_ranges=command_ranges,
+        base_height=base_height,
+        min_base_height=min_base_height,
+        max_base_height=max_base_height,
+        max_tilt_rad=max_tilt_rad,
+        reward_scales=reward_scales,
+    )
+    cfg.terrain = TerrainCfg(
+        terrain_type="generator",
+        terrain_generator=TerrainGeneratorCfg(curriculum=True),
+        static_friction=0.9,
+        dynamic_friction=0.8,
+    )
+    cfg.sensors["terrain_scan"] = RayCasterCfg(
+        name="terrain_scan",
+        frame_name="base",
+        pattern=scan_pattern,
+        attach_yaw_only=True,
+    )
+    cfg.sensors["nonfoot_ground_contact"] = ContactSensorCfg(
+        name="nonfoot_ground_contact",
+        primary=ContactMatchCfg(
+            mode="geom",
+            pattern=r".*_collision\d*$",
+            entity="robot",
+            exclude=(r".*foot.*",),
+        ),
+        secondary=ContactMatchCfg(mode="body", pattern="terrain", entity="terrain"),
+        fields=("found", "force"),
+        reduce="none",
+        history_length=4,
+    )
+    cfg.observations["actor"].terms["height_scan"] = ObservationTermCfg(
+        func=mdp.height_scan,
+        noise=(-0.05, 0.05),
+        scale=1.0,
+        params={"sensor_name": "terrain_scan"},
+    )
+    cfg.observations["critic"].terms["height_scan"] = ObservationTermCfg(
+        func=mdp.height_scan,
+        scale=1.0,
+        params={"sensor_name": "terrain_scan"},
+    )
+    cfg.observation_scales.update(
+        {
+            "height_scan_dim": scan_pattern.num_rays,
+            "height_scan_scale": 1.0,
+        }
+    )
+    cfg.events["randomize_terrain"] = EventTermCfg(
+        func=mdp.randomize_terrain,
+        mode="reset",
+        params={"terrain_name": "rough"},
+    )
+    cfg.curriculum["terrain_levels"] = TermCfg(
+        func=mdp.terrain_levels,
+        params={"success_lin_vel_threshold": 0.7, "failure_lin_vel_threshold": 0.2},
+    )
+    cfg.rewards["feet_air_time"] = TermCfg(
+        func=mdp.feet_air_time,
+        weight=0.25,
+        params={"command_name": "twist", "sensor_name": "feet_ground_contact"},
+    )
+    cfg.rewards["foot_clearance"] = TermCfg(
+        func=mdp.foot_clearance,
+        weight=-0.05,
+        params={"target_height": 0.08, "sensor_name": "terrain_scan"},
+    )
+    cfg.rewards["body_ang_vel_l2"] = TermCfg(func=mdp.body_ang_vel_l2, weight=-0.05)
+    cfg.terminations["illegal_contact"] = TermCfg(
+        func=mdp.illegal_contact,
+        params={"sensor_name": "nonfoot_ground_contact", "force_threshold": 10.0},
+    )
+    cfg.randomization.update(
+        {
+            "terrain": "rough",
+            "terrain_curriculum": True,
+            "height_scan_dim": scan_pattern.num_rays,
+        }
+    )
+    return cfg

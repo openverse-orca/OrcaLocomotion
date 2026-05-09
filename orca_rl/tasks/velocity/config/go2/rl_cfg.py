@@ -7,7 +7,7 @@ from orca_rl.tasks.velocity.config_types import (
 )
 
 
-def unitree_go2_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
+def _unitree_go2_ppo_runner_cfg(run_name: str, max_iterations: int) -> RslRlOnPolicyRunnerCfg:
     """Create RSL-RL PPO runner configuration for Unitree GO2 velocity."""
 
     return RslRlOnPolicyRunnerCfg(
@@ -26,12 +26,19 @@ def unitree_go2_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
             obs_normalization=True,
         ),
         algorithm=RslRlPpoAlgorithmCfg(learning_rate=3.0e-4),
-        run_name="go2_flat_velocity",
+        run_name=run_name,
         save_interval=100,
         num_steps_per_env=24,
-        max_iterations=1500,
+        max_iterations=max_iterations,
     )
 
 
-RL_CONFIG_FACTORY = unitree_go2_ppo_runner_cfg
+def unitree_go2_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
+    return _unitree_go2_ppo_runner_cfg(run_name="go2_flat_velocity", max_iterations=1500)
 
+
+def unitree_go2_rough_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
+    return _unitree_go2_ppo_runner_cfg(run_name="go2_rough_velocity", max_iterations=2500)
+
+
+RL_CONFIG_FACTORY = unitree_go2_ppo_runner_cfg

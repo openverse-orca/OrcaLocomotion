@@ -11,6 +11,7 @@ References used for the target shape:
 - https://github.com/mujocolab/mjlab/tree/main/src/mjlab
 - https://github.com/mujocolab/mjlab/tree/main/src/mjlab/tasks/velocity/config
 - https://github.com/mujocolab/mjlab/tree/main/src/mjlab/tasks/velocity/config/go1
+- https://github.com/mujocolab/mjlab/tree/main/src/mjlab/tasks/velocity/mdp
 
 ## New Layout
 
@@ -39,6 +40,14 @@ orca_rl/tasks/velocity/velocity_env_cfg.py
 orca_rl/tasks/velocity/mdp/
 ```
 
+Mjlab-inspired support packages now live here:
+
+```text
+orca_rl/sensor/
+orca_rl/terrains/
+orca_rl/managers/
+```
+
 Old YAML config shims, robot-named VecEnv adapters, and robot-named task wrappers were removed.
 
 ## Behavior
@@ -52,6 +61,8 @@ Old YAML config shims, robot-named VecEnv adapters, and robot-named task wrapper
 - Robot-specific scene binding is selected by `scene_binding.resolver` in each task config. Built-ins use short aliases:
   `g1` and `go2`. Dotted import paths are still supported for custom robots.
 - Python config loading now supports `TASK_CONFIG_FACTORY` and `RL_CONFIG_FACTORY`.
+- Python config loading now supports `file.py:factory_name`, which lets rough configs live beside flat configs before
+  the later task registry is introduced.
 - YAML locomotion config loading was removed from the active path; canonical configs are Python cfg files only.
 - G1 still uses the discovered asset path:
   `assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda`.
@@ -59,9 +70,22 @@ Old YAML config shims, robot-named VecEnv adapters, and robot-named task wrapper
 - Actor/critic observation grouping remains in each robot's `rl_cfg.py`.
 - Rewards, observations, commands, events, and terminations are declared as MDP-style terms in Python cfg objects, then
   converted to the legacy dict shape consumed by the current Orca RSL-RL runtime.
+- MDP declarations now include the rough-terrain terms used by mjlab-style velocity tasks: terrain curriculum,
+  terrain randomization, height scan observation, foot height observation, foot air time, foot clearance, stand-still,
+  body angular velocity, joint deviation, illegal contact, and mean action acceleration metric.
+- Terrain and sensor config metadata now has first-class package homes. `orca_rl.terrains` describes plane/generator
+  terrain metadata; `orca_rl.sensor` describes contact sensors and ray-cast terrain scans. The current Orca runtime
+  consumes this for config, diagnostics, and rough observation dimensions. Actual terrain asset generation remains an
+  OrcaLab scene/asset concern.
+- G1 and GO2 both provide flat and rough velocity config factories:
+  `unitree_g1_flat_env_cfg`, `unitree_g1_rough_env_cfg`, `unitree_go2_flat_env_cfg`, and
+  `unitree_go2_rough_env_cfg`.
+- Rough configs add a 187-ray height scan placeholder to policy and privileged observations. It is currently zero-filled
+  until an OrcaLab terrain ray query is wired in; this keeps model shapes and task wiring ready for the terrain backend.
 - RSL-RL checkpoint alias saving and W&B CLI flags are unchanged.
 - Train/play/eval now print an IsaacLab/MJLab-style terminal runtime summary before policy construction or inference:
-  device/GPU, action and observation dimensions, rewards, terminations, commands, domain randomization, and scene binding.
+  device/GPU, action and observation dimensions, rewards, terminations, commands, domain randomization, terrain, sensors,
+  curriculum, and scene binding.
 - `run_train`, `run_play`, and `run_eval` default `--config` values now point at the canonical GO2 config path.
 - `.orcalab/config.toml` now points the menu entries at the canonical task config paths.
 
@@ -85,18 +109,30 @@ from orca_rl.utils import load_task_and_train_cfg
 configs = [
     'orca_rl/tasks/velocity/config/g1/env_cfgs.py',
     'orca_rl/tasks/velocity/config/go2/env_cfgs.py',
+    'orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg',
+    'orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg',
 ]
 for cfg in configs:
     task, train = load_task_and_train_cfg(cfg)
-    print(cfg, task['robot'], task['name'], train['run_name'], len(task['control']['max_delta']))
+    print(
+        cfg,
+        task['robot'],
+        task['name'],
+        task['terrain']['terrain_type'],
+        task['observations'].get('height_scan_dim', 0),
+        train['run_name'],
+        len(task['control']['max_delta']),
+    )
 PY
 ```
 
 Observed:
 
 ```text
-orca_rl/tasks/velocity/config/g1/env_cfgs.py g1 g1_flat_velocity g1_flat_velocity 29
-orca_rl/tasks/velocity/config/go2/env_cfgs.py go2 go2_flat_velocity go2_flat_velocity 12
+orca_rl/tasks/velocity/config/g1/env_cfgs.py g1 g1_flat_velocity plane 0 g1_flat_velocity 29
+orca_rl/tasks/velocity/config/go2/env_cfgs.py go2 go2_flat_velocity plane 0 go2_flat_velocity 12
+orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg g1 g1_rough_velocity generator 187 g1_rough_velocity 29
+orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg go2 go2_rough_velocity generator 187 go2_rough_velocity 12
 ```
 
 Also checked:
@@ -135,4 +171,20 @@ python -m orca_rl.run_train \
   --logger wandb \
   --wandb-project orca_locomotion \
   --wandb-mode online
+```
+
+GO2 rough training:
+
+```bash
+python -m orca_rl.run_train \
+  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
+  --remote localhost:50051
+```
+
+G1 rough training:
+
+```bash
+python -m orca_rl.run_train \
+  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg \
+  --remote localhost:50051
 ```

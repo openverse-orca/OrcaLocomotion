@@ -169,6 +169,8 @@ class LocomotionEnvCfg:
     orcagym_addresses: tuple[str, ...] = ("localhost:50051",)
     seed: int = 1
     sim: dict[str, Any] = field(default_factory=dict)
+    terrain: Any | None = None
+    sensors: dict[str, Any] = field(default_factory=dict)
     scene_binding: dict[str, Any] = field(default_factory=dict)
     episode: dict[str, Any] = field(default_factory=dict)
     actions: dict[str, JointPositionActionCfg] = field(default_factory=dict)
@@ -181,6 +183,8 @@ class LocomotionEnvCfg:
     reset: dict[str, Any] = field(default_factory=dict)
     contacts: dict[str, Any] = field(default_factory=dict)
     randomization: dict[str, Any] = field(default_factory=dict)
+    curriculum: dict[str, TermCfg] = field(default_factory=dict)
+    metrics: dict[str, TermCfg] = field(default_factory=dict)
     train: dict[str, Any] = field(default_factory=dict)
     play: dict[str, Any] = field(default_factory=dict)
     eval: dict[str, Any] = field(default_factory=dict)
@@ -195,6 +199,8 @@ class LocomotionEnvCfg:
             "rsl_rl_config": self.rsl_rl_config,
             "seed": self.seed,
             "sim": self.sim,
+            "terrain": _metadata_value(self.terrain),
+            "sensors": _metadata_value(self.sensors),
             "scene_binding": self.scene_binding,
             "episode": self.episode,
             "control": self._legacy_control(),
@@ -205,6 +211,8 @@ class LocomotionEnvCfg:
             "reset": self.reset,
             "contacts": self.contacts,
             "randomization": self.randomization,
+            "curriculum": {name: term.metadata() for name, term in self.curriculum.items()},
+            "metrics": {name: term.metadata() for name, term in self.metrics.items()},
             "train": self.train,
             "play": self.play,
             "eval": self.eval,
@@ -256,6 +264,8 @@ class LocomotionEnvCfg:
             "events": {name: term.metadata() for name, term in self.events.items()},
             "rewards": {name: term.metadata() for name, term in self.rewards.items()},
             "terminations": {name: term.metadata() for name, term in self.terminations.items()},
+            "curriculum": {name: term.metadata() for name, term in self.curriculum.items()},
+            "metrics": {name: term.metadata() for name, term in self.metrics.items()},
         }
 
 
@@ -354,9 +364,10 @@ class RslRlOnPolicyRunnerCfg:
 def _metadata_value(value: Any) -> Any:
     if isinstance(value, SceneEntityCfg):
         return value.to_dict()
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        return value.to_dict()
     if isinstance(value, dict):
         return {key: _metadata_value(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return tuple(_metadata_value(item) for item in value)
     return value
-

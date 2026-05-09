@@ -17,7 +17,11 @@ ensure_project_root_on_path()
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Play a trained Orca locomotion RSL-RL policy.")
-    parser.add_argument("--config", default="orca_rl/tasks/velocity/config/go2/env_cfgs.py")
+    parser.add_argument(
+        "--config",
+        default="orca_rl/tasks/velocity/config/go2/env_cfgs.py",
+        help="Python cfg file. Use file.py:factory_name to select a non-default factory such as rough terrain.",
+    )
     parser.add_argument("--ckpt", default=None, help="RSL-RL checkpoint path, e.g. model_1000.pt.")
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=0, help="0 means run until interrupted.")

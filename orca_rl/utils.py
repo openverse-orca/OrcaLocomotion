@@ -21,8 +21,19 @@ def ensure_project_root_on_path() -> None:
         sys.path.insert(0, root)
 
 
+def _split_config_selector(path: str | Path) -> tuple[str | Path, str | None]:
+    text = str(path)
+    if ".py:" not in text:
+        return path, None
+    file_text, _, factory_name = text.partition(".py:")
+    if not factory_name:
+        raise ValueError(f"Config factory selector is empty: {path}")
+    return f"{file_text}.py", factory_name
+
+
 def _resolve_config_path(path: str | Path, base_dir: Path | None = None) -> Path:
-    raw_path = Path(path).expanduser()
+    config_path, _ = _split_config_selector(path)
+    raw_path = Path(config_path).expanduser()
     if raw_path.is_absolute():
         return raw_path
 
@@ -36,8 +47,10 @@ def _resolve_config_path(path: str | Path, base_dir: Path | None = None) -> Path
     return ((base_dir or PROJECT_ROOT) / raw_path).resolve()
 
 
-def _resolve_referenced_config(path: str | Path, owner_path: str | Path) -> Path:
-    return _resolve_config_path(path, _resolve_config_path(owner_path).parent)
+def _resolve_referenced_config(path: str | Path, owner_path: str | Path) -> str:
+    config_path, factory_name = _split_config_selector(path)
+    resolved = _resolve_config_path(config_path, _resolve_config_path(owner_path).parent)
+    return f"{resolved}:{factory_name}" if factory_name else str(resolved)
 
 
 def _config_to_dict(config: Any, path: Path) -> dict[str, Any]:
@@ -48,7 +61,11 @@ def _config_to_dict(config: Any, path: Path) -> dict[str, Any]:
     return config
 
 
-def _load_python_config(path: Path, factory_names: tuple[str, ...]) -> dict[str, Any]:
+def _load_python_config(
+    path: Path,
+    factory_names: tuple[str, ...],
+    factory_selector: str | None = None,
+) -> dict[str, Any]:
     ensure_project_root_on_path()
     module_name = f"_orca_locomotion_cfg_{path.stem}_{abs(hash(path))}"
     spec = importlib.util.spec_from_file_location(module_name, path)
@@ -56,6 +73,12 @@ def _load_python_config(path: Path, factory_names: tuple[str, ...]) -> dict[str,
         raise RuntimeError(f"Cannot import Python config: {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+
+    if factory_selector is not None:
+        factory = getattr(module, factory_selector, None)
+        if not callable(factory):
+            raise ValueError(f"Python config factory is not callable: {path}:{factory_selector}")
+        return _config_to_dict(factory(), path)
 
     for factory_name in factory_names:
         factory = getattr(module, factory_name, None)
@@ -79,9 +102,10 @@ def _load_python_config(path: Path, factory_names: tuple[str, ...]) -> dict[str,
 
 
 def load_config(path: str | Path, factory_names: tuple[str, ...] = ("CONFIG_FACTORY",)) -> dict[str, Any]:
+    _, factory_selector = _split_config_selector(path)
     config_path = _resolve_config_path(path)
     if config_path.suffix == ".py":
-        return _load_python_config(config_path, factory_names)
+        return _load_python_config(config_path, factory_names, factory_selector)
     raise ValueError(f"Locomotion configs are Python cfg files now. Expected .py, got: {config_path}")
 
 

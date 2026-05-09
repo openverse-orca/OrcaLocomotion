@@ -6,7 +6,7 @@ Current targets:
 
 - Unitree GO2
 - Unitree G1
-- flat velocity tracking
+- flat and rough velocity tracking
 - asymmetric actor-critic with privileged observations
 - bounded residual joint-target actions
 
@@ -34,7 +34,12 @@ Programmatic use is exposed through the top-level package:
 
 ```python
 from orca_rl import load_task_and_train_cfg, make_locomotion_vec_env
-from orca_rl.tasks.velocity.config import unitree_g1_flat_env_cfg, unitree_go2_flat_env_cfg
+from orca_rl.tasks.velocity.config import (
+    unitree_g1_flat_env_cfg,
+    unitree_g1_rough_env_cfg,
+    unitree_go2_flat_env_cfg,
+    unitree_go2_rough_env_cfg,
+)
 ```
 
 The Orca runtime side is robot-neutral: `rsl_env/adapters/vecenv.py` creates the RSL-RL VecEnv, and
@@ -43,7 +48,8 @@ config's `scene_binding.resolver` alias. Built-in aliases are `g1` and `go2`; cu
 for new assets.
 
 When train/play/eval starts, Orca RL prints a terminal runtime summary with the selected device and GPU, observation
-dimensions, action dimensions, reward terms, termination terms, commands, domain randomization, and scene binding.
+dimensions, action dimensions, reward terms, termination terms, commands, domain randomization, terrain, sensors,
+curriculum, and scene binding.
 
 For G1, use `orca_rl/tasks/velocity/config/g1/env_cfgs.py`. It scans the existing G1 scene first; if no complete
 G1 is found, it tries to publish `g1_000` from:
@@ -62,6 +68,22 @@ Train G1:
 python -m orca_rl.run_train \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py
 ```
+
+Train GO2 rough terrain config:
+
+```bash
+python -m orca_rl.run_train \
+  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg
+```
+
+Train G1 rough terrain config:
+
+```bash
+python -m orca_rl.run_train \
+  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg
+```
+
+The `file.py:factory_name` form is the development-mode task selector until the later registry layer lands.
 
 Train G1 with W&B logging:
 

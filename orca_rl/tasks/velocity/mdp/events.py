@@ -16,3 +16,6 @@ def randomize_friction():
 def randomize_body_mass():
     """Sample base-mass randomization state exposed to privileged observations."""
 
+
+def randomize_terrain():
+    """Select or reset a rough-terrain tile."""
