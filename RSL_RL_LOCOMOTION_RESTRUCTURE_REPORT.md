@@ -134,10 +134,10 @@ PY
 Observed:
 
 ```text
-orca_rl/tasks/velocity/config/g1/env_cfgs.py g1 g1_flat_velocity plane 0 g1_flat_velocity 29
-orca_rl/tasks/velocity/config/go2/env_cfgs.py go2 go2_flat_velocity plane 0 go2_flat_velocity 12
-orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg g1 g1_rough_velocity generator 187 g1_rough_velocity 29
-orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg go2 go2_rough_velocity generator 187 go2_rough_velocity 12
+orca_rl/tasks/velocity/config/g1/env_cfgs.py g1 g1_flat_velocity plane 0 flat 29
+orca_rl/tasks/velocity/config/go2/env_cfgs.py go2 go2_flat_velocity plane 0 flat 12
+orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg g1 g1_rough_velocity generator 187 rough 29
+orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg go2 go2_rough_velocity generator 187 rough 12
 ```
 
 Also checked:
@@ -157,6 +157,14 @@ Also checked:
   naming differs.
 - Removed the former examples-scoped package path. Runtime entrypoints are now `orca_rl.run_train`, `orca_rl.run_play`,
   and `orca_rl.run_eval`.
+- Added RSL-RL-style `num_envs` as the public parallelism field. `python -m orca_rl.run_train --num-envs N` overrides
+  the config value, and the VecEnv now resolves exactly N scene robot bindings before creating the RSL-RL environment.
+- Updated G1 scene binding so `spawn_if_missing=True` publishes `g1_000`, `g1_001`, ... when the scene has fewer complete
+  G1 instances than requested by `num_envs`.
+- Verified live G1 smoke test in the OrcaLab conda env:
+  `python -m orca_rl.run_train --config orca_rl/tasks/velocity/config/g1/env_cfgs.py --num-envs 2 --num-iterations 1`.
+  The run resolved `['g1_000', 'g1_001']`, printed `num_envs: 2`, collected 48 rollout steps, completed one RSL-RL PPO
+  iteration on `cuda:0`, and saved `model_last.pt` / `model_final.pt`.
 
 ## Recommended Commands
 
@@ -166,6 +174,7 @@ G1 visual training smoke:
 python -m orca_rl.run_train \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
   --remote localhost:50051 \
+  --num-envs 2 \
   --num-iterations 1
 ```
 
@@ -215,7 +224,8 @@ terrain training environment inside OrcaLab. The important distinction is:
 Working now:
 
 - `unitree_g1_rough_env_cfg` and `unitree_go2_rough_env_cfg` load through the `file.py:factory_name` selector.
-- RSL-RL runner configs switch to `g1_rough_velocity` / `go2_rough_velocity` and 2500 default iterations.
+- RSL-RL runner configs use mjlab-style `logs/rsl_rl/<experiment_name>/<date_time>_<run_name>` output directories.
+- Runner configs use Gaussian policy distributions and full PPO parameters with 30000 default iterations.
 - `orca_rl.terrains.generator` creates procedural heightfields for:
   - `random_uniform`
   - `pyramid_stairs`
@@ -241,25 +251,43 @@ Working now:
   - base height / tilt / base-contact terminations
 - `terrain.physics_enabled` and `terrain.export_path` are present as future integration hooks.
 
-Partially working / metadata-only:
+Implemented after the rough/flat follow-up audit:
 
-- `RayCasterCfg` is not an OrcaLab raycaster yet. It describes scan shape and frame metadata, while the runtime scan is
-  computed from the generated heightfield in Python.
-- `ContactSensorCfg` and `nonfoot_ground_contact` are metadata. Actual contact checks still use OrcaGym contact queries
-  and the existing robot contact/body names.
-- `randomize_friction` and `randomize_body_mass` currently sample values and expose them to privileged observations, but
-  they do not mutate OrcaLab physics parameters yet.
-- `randomize_terrain` exists as an MDP/event declaration, but terrain is generated once at environment setup. Reset-time
-  terrain tile switching is not implemented.
-- `terrain_levels` exists as curriculum metadata, but there is no terrain difficulty update loop yet.
-- Rough rewards declared in config but not computed by `FlatVelocityReward` yet:
+- `randomize_friction` now applies the sampled scale to matched local MuJoCo ground/terrain geoms in the
+  `OrcaGymLocalEnv` training path.
+- `randomize_body_mass` now applies a reset-safe sampled base-mass delta to the configured base body. The implementation
+  stores the original mass and writes the exact randomized mass each reset, so it does not accumulate deltas.
+- Base inertia scaling and base COM-offset randomization are active and use the same reset-safe baseline restore pattern.
+- Actuator randomization is active through sampled PD gain scales and torque-limit/strength scales.
+- Integer action latency is active through a per-environment action delay buffer.
+- Periodic push disturbance is active by adding sampled horizontal/yaw velocity impulses to the local base `qvel`.
+- Local solver randomization is active for MuJoCo solver iteration count and tolerance scale.
+- Contact randomization is active for matched ground/terrain geoms through reset-safe `solref`, `solimp`, and `margin`
+  updates.
+- Rough reward terms are now computed by the runtime:
   - `feet_air_time`
   - `foot_clearance`
   - `body_ang_vel_l2`
   - `stand_still`
   - `joint_deviation_l1`
-- `illegal_contact` is declared as a termination term, but `TerminationManager` currently only enforces height, tilt,
-  invalid state, and configured base contact.
+- `illegal_contact` termination is active through OrcaGym contact queries. It flags non-foot robot-body contact with the
+  world as terminal.
+- Reset-time rough heightfield resampling is active for observation terrain. Physical terrain switching still waits on
+  the terrain import/publish path.
+
+Partially working / metadata-only:
+
+- `RayCasterCfg` is not an OrcaLab raycaster yet. It describes scan shape and frame metadata, while the runtime scan is
+  computed from the generated heightfield in Python.
+- `ContactSensorCfg` and `nonfoot_ground_contact` are still metadata for the exact sensor declaration. Actual contact
+  checks use OrcaGym contact queries and robot/world body matching.
+- `randomize_terrain` now resamples the generated heightfield for observations on reset. Physical terrain tile switching
+  is not implemented until terrain import/publish is wired.
+- `terrain_levels` exists as curriculum metadata, but there is no terrain difficulty update loop yet.
+- Force-thresholded illegal contact is not exact yet because the current runtime uses body/contact matching rather than
+  a named-pair force sensor.
+- Damping, armature, joint friction, richer motor delay dynamics, and full body-inertia tensor randomization are not
+  implemented yet.
 
 Not working yet / blocked by OrcaLab integration:
 
@@ -278,8 +306,9 @@ Missing implementation checklist:
 - Make `terrain.physics_enabled=True` fail loudly if no terrain collision backend is available.
 - Replace Python heightfield scan with OrcaLab raycast only if OrcaLab can raycast against the same imported terrain;
   otherwise keep Python scan as the source of truth.
-- Apply friction and base-mass randomization to OrcaLab physics, not only privileged observations.
-- Implement reset-time terrain tile selection and terrain curriculum progression.
-- Implement rough reward terms in `FlatVelocityReward` or split reward managers by task terrain type.
-- Implement `illegal_contact` using the declared `nonfoot_ground_contact` sensor/contact selector.
+- Add RemoteEnv-specific setters for local-domain-randomization parity if training later moves away from
+  `OrcaGymLocalEnv`.
+- Implement physical terrain tile selection and terrain curriculum progression after terrain collision import works.
+- Upgrade `illegal_contact` to use the declared `nonfoot_ground_contact` force-thresholded selector when OrcaLab exposes
+  filtered contact-force queries.
 - Add a visual/debug command that exports the terrain mesh and a small image/array summary of the sampled height scan.

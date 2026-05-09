@@ -43,6 +43,7 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
     ) -> None:
         self.cfg = cfg
         self.robot_config = robot_config
+        self.agent_name = agent_name
         sim_cfg = cfg["sim"]
         self._render_mode = render_mode
         self.env_id = env_id
@@ -76,7 +77,9 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
         self.actuator_names = [self.actuator(name) for name in self.robot_config["actuator_names"]]
         requested_contact_sites = [self.site(name) for name in self.robot_config.get("contact_site_names", [])]
         self.foot_sensor_names = [self.sensor(name) for name in self.robot_config.get("sensor_foot_touch_names", [])]
-        self.base_contact_body_names = [self.body(name) for name in self.robot_config.get("base_contact_body_names", [])]
+        self.base_contact_body_names = [
+            self.body(name) for name in self.robot_config.get("base_contact_body_names", [])
+        ]
         self.foot_body_names = [self.body(name) for name in self.robot_config.get("foot_body_names", [])]
 
         joint_dict = self.model.get_joint_dict()
@@ -158,12 +161,15 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
         )
         self.reward_manager = FlatVelocityReward(
             joint_limits=self.joint_limits,
+            nominal_qpos=self.nominal_qpos,
             cfg=RewardConfig(**self.cfg.get("rewards", {})),
         )
         self.termination_manager = TerminationManager(TerminationConfig(**self.cfg.get("termination", {})))
         self.command_sampler = FlatVelocityCommandSampler(CommandConfig(**self.cfg.get("commands", {})), self.rng)
         self.randomizer = DomainRandomizer(RandomizationConfig(**self.cfg.get("randomization", {})), self.rng)
         self.terrain_runtime = TerrainRuntime.from_task_cfg(self.cfg, self.rng)
+        self._setup_domain_randomization_targets()
+        self._setup_contact_classification()
         self.command_resample_steps = max(
             1,
             int(round(float(self.cfg.get("commands", {}).get("resample_time_s", 4.0)) / self.control_dt)),
@@ -173,16 +179,20 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
         self.last_torque = np.zeros(self.num_actions, dtype=np.float64)
         self.command = self.command_sampler.sample()
         self.randomization_state = RandomizationState()
+        self.action_delay_buffer = [np.zeros(self.num_actions, dtype=np.float64)]
+        self.push_interval_steps = self._push_interval_steps()
         num_feet = len(self.contact_site_names) if self.contact_site_names else len(self.foot_body_names)
         self.last_foot_pos_world = np.zeros((num_feet, 3), dtype=np.float64)
+        self.feet_air_time = np.zeros(num_feet, dtype=np.float64)
 
     def get_observations(self, noisy: bool = True) -> dict[str, np.ndarray]:
-        return self.obs_builder.build(self._read_state(), noisy=noisy)
+        return self.obs_builder.build(self._read_state(update_air_time=False), noisy=noisy)
 
     def step(self, action: np.ndarray) -> LocomotionStepResult:
         action = np.asarray(action, dtype=np.float64).reshape(self.num_actions)
+        clipped_action = np.clip(action, -1.0, 1.0)
         self.previous_action = self.last_action.copy()
-        self.last_action = np.clip(action, -1.0, 1.0)
+        self.last_action = self._delayed_action(clipped_action)
 
         if self.episode_length % self.command_resample_steps == 0:
             self.command = self.command_sampler.sample()
@@ -201,9 +211,11 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
             self.render()
 
         self.episode_length += 1
-        state = self._read_state()
+        self._maybe_apply_push_disturbance()
+        state = self._read_state(update_air_time=True)
         base_contact = self._has_base_contact()
-        terminated, termination_log = self.termination_manager.check(state, base_contact)
+        illegal_contact = self._has_illegal_contact()
+        terminated, termination_log = self.termination_manager.check(state, base_contact, illegal_contact)
         time_out = self.episode_length >= self.max_episode_length
         reward, reward_log = self.reward_manager.compute(
             state=state,
@@ -233,6 +245,10 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
         self.episode_length = 0
         self.command = self.command_sampler.sample()
         self.randomization_state = self.randomizer.sample()
+        if self.cfg.get("randomization", {}).get("terrain") == "rough":
+            self.terrain_runtime.resample()
+        self._apply_domain_randomization()
+        self._reset_action_delay_buffer()
         self.last_action.fill(0.0)
         self.previous_action.fill(0.0)
         self.last_torque.fill(0.0)
@@ -273,9 +289,10 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
         if self._render_mode == "human":
             self.render()
         self.last_foot_pos_world = self._query_foot_positions()
+        self.feet_air_time.fill(0.0)
         return self.get_observations(noisy=True), {"command": self.command.copy()}
 
-    def _read_state(self) -> LocomotionTaskState:
+    def _read_state(self, update_air_time: bool = False) -> LocomotionTaskState:
         base_qpos = self.data.qpos[self.base_qpos_offset : self.base_qpos_offset + 7].copy()
         base_qvel = self.data.qvel[self.base_qvel_offset : self.base_qvel_offset + 6].copy()
         qpos = self.data.qpos[self.leg_qpos_indices].copy()
@@ -283,6 +300,17 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
         foot_pos = self._query_foot_positions()
         foot_vel = (foot_pos - self.last_foot_pos_world) / max(self.control_dt, 1e-6)
         self.last_foot_pos_world = foot_pos.copy()
+        foot_contacts = self._query_foot_contacts()
+        if foot_contacts.shape != self.feet_air_time.shape:
+            self.feet_air_time = np.zeros_like(foot_contacts, dtype=np.float64)
+        previous_air_time = self.feet_air_time.copy()
+        if update_air_time:
+            self.feet_air_time = np.where(foot_contacts > 0.5, 0.0, self.feet_air_time + self.control_dt)
+        first_foot_contact = np.logical_and(foot_contacts > 0.5, previous_air_time > 0.0).astype(np.float64)
+        foot_ground_heights = np.array(
+            [self.terrain_runtime.height_at(float(pos[0]), float(pos[1])) for pos in foot_pos],
+            dtype=np.float64,
+        )
         return LocomotionTaskState(
             base_pos=base_qpos[:3],
             base_quat=base_qpos[3:7],
@@ -295,9 +323,13 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
             last_torque=self.last_torque.copy(),
             foot_pos_world=foot_pos,
             foot_vel_world=foot_vel,
-            foot_contacts=self._query_foot_contacts(),
+            foot_contacts=foot_contacts,
+            foot_air_time=previous_air_time,
+            first_foot_contact=first_foot_contact,
+            foot_ground_heights=foot_ground_heights,
             friction_scale=self.randomization_state.friction_scale,
             base_mass_delta=self.randomization_state.base_mass_delta,
+            domain_randomization=self._randomization_observation(),
             height_scan=self.terrain_runtime.scan(base_qpos[:3], base_qpos[3:7]),
         )
 
@@ -344,3 +376,239 @@ class OrcaLocomotionTask(OrcaGymLocalEnv):
             if body1 in self.base_contact_body_names or body2 in self.base_contact_body_names:
                 return True
         return False
+
+    def _has_illegal_contact(self) -> bool:
+        if not self.termination_manager.cfg.terminate_on_illegal_contact:
+            return False
+        contacts = self.query_contact_simple()
+        for contact in contacts:
+            body1 = self.model.get_geom_body_name(contact["Geom1"])
+            body2 = self.model.get_geom_body_name(contact["Geom2"])
+            if self._is_illegal_robot_world_contact(body1, body2):
+                return True
+        return False
+
+    def _is_illegal_robot_world_contact(self, body1: str, body2: str) -> bool:
+        body1_is_robot = body1 in self.robot_body_names
+        body2_is_robot = body2 in self.robot_body_names
+        if body1_is_robot and body2_is_robot:
+            return False
+        if body1 in self.illegal_contact_body_names and body2 not in self.robot_body_names:
+            return True
+        if body2 in self.illegal_contact_body_names and body1 not in self.robot_body_names:
+            return True
+        return False
+
+    def _setup_contact_classification(self) -> None:
+        body_names = set(self.model.get_body_names()) if hasattr(self.model, "get_body_names") else set()
+        prefixed = {name for name in body_names if name.startswith(f"{self.agent_name}_")}
+        configured = set(self.base_contact_body_names) | set(self.foot_body_names)
+        self.robot_body_names = prefixed | configured
+        self.illegal_contact_body_names = self.robot_body_names - set(self.foot_body_names)
+
+    def _setup_domain_randomization_targets(self) -> None:
+        self._baseline_geom_friction: dict[str, np.ndarray] = {}
+        self._baseline_geom_solref: dict[str, np.ndarray] = {}
+        self._baseline_geom_solimp: dict[str, np.ndarray] = {}
+        self._baseline_geom_margin: dict[str, float] = {}
+        self._baseline_base_mass: float | None = None
+        self._baseline_base_ipos: np.ndarray | None = None
+        self._baseline_base_inertia: np.ndarray | None = None
+        self._randomized_base_body_name: str | None = None
+        self._baseline_solver_iterations: int | None = None
+        self._baseline_solver_tolerance: float | None = None
+
+        model = self._local_mujoco_model()
+        if model is None:
+            return
+        self._baseline_solver_iterations = int(getattr(model.opt, "iterations", 0))
+        self._baseline_solver_tolerance = float(getattr(model.opt, "tolerance", 0.0))
+
+        for geom_name in self._find_friction_geom_names():
+            try:
+                geom = model.geom(geom_name)
+                self._baseline_geom_friction[geom_name] = np.asarray(geom.friction, dtype=np.float64).copy()
+                self._baseline_geom_solref[geom_name] = np.asarray(geom.solref, dtype=np.float64).copy()
+                self._baseline_geom_solimp[geom_name] = np.asarray(geom.solimp, dtype=np.float64).copy()
+                self._baseline_geom_margin[geom_name] = float(np.asarray(geom.margin).reshape(-1)[0])
+            except Exception:
+                continue
+
+        randomization_cfg = self.cfg.get("randomization", {})
+        base_body_name = randomization_cfg.get("base_mass_body_name")
+        if base_body_name is None and self.base_contact_body_names:
+            base_body_name = self.base_contact_body_names[0]
+        if base_body_name is None:
+            return
+        try:
+            body = model.body(base_body_name)
+            self._randomized_base_body_name = str(base_body_name)
+            self._baseline_base_mass = float(np.asarray(body.mass, dtype=np.float64).reshape(-1)[0])
+            self._baseline_base_ipos = np.asarray(body.ipos, dtype=np.float64).copy()
+            self._baseline_base_inertia = np.asarray(body.inertia, dtype=np.float64).copy()
+        except Exception:
+            self._randomized_base_body_name = None
+
+    def _find_friction_geom_names(self) -> list[str]:
+        geom_dict = self.model.get_geom_dict() if hasattr(self.model, "get_geom_dict") else {}
+        randomization_cfg = self.cfg.get("randomization", {})
+        explicit_names = [str(name) for name in randomization_cfg.get("friction_geom_names", ())]
+        if explicit_names:
+            return [name for name in explicit_names if name in geom_dict]
+
+        patterns = tuple(
+            str(pattern).lower()
+            for pattern in randomization_cfg.get(
+                "friction_geom_patterns",
+                ("floor", "ground", "terrain", "plane", "hfield"),
+            )
+        )
+        matches: list[str] = []
+        for geom_name, geom_info in geom_dict.items():
+            body_name = str(geom_info.get("BodyName", ""))
+            haystack = f"{geom_name} {body_name}".lower()
+            if any(pattern in haystack for pattern in patterns):
+                matches.append(str(geom_name))
+        return matches
+
+    def _apply_domain_randomization(self) -> None:
+        model = self._local_mujoco_model()
+        if model is None:
+            return
+
+        self._apply_actuator_randomization()
+        self._apply_solver_randomization(model)
+
+        if self._baseline_geom_friction:
+            friction_dict = {
+                name: (base_friction * self.randomization_state.friction_scale).astype(np.float64)
+                for name, base_friction in self._baseline_geom_friction.items()
+            }
+            self.set_geom_friction(friction_dict)
+            self._apply_contact_randomization(model)
+
+        if self._randomized_base_body_name is not None and self._baseline_base_mass is not None:
+            body = model.body(self._randomized_base_body_name)
+            randomized_mass = max(1e-3, self._baseline_base_mass + self.randomization_state.base_mass_delta)
+            body.mass = [randomized_mass]
+            if self._baseline_base_ipos is not None:
+                body.ipos = self._baseline_base_ipos + np.asarray(
+                    self.randomization_state.base_com_offset,
+                    dtype=np.float64,
+                )
+            if self._baseline_base_inertia is not None:
+                body.inertia = self._baseline_base_inertia * self.randomization_state.base_inertia_scale
+
+    def _apply_actuator_randomization(self) -> None:
+        state = self.randomization_state
+        self.action_mapper.kp = self.kp * state.kp_scale
+        self.action_mapper.kd = self.kd * state.kd_scale
+        self.action_mapper.torque_limits = self.torque_limits * state.torque_scale
+
+    def _apply_solver_randomization(self, model: Any) -> None:
+        state = self.randomization_state
+        if self._baseline_solver_iterations is not None and state.solver_iterations is not None:
+            try:
+                model.opt.iterations = int(state.solver_iterations)
+            except Exception:
+                pass
+        if self._baseline_solver_tolerance is not None:
+            try:
+                model.opt.tolerance = max(0.0, self._baseline_solver_tolerance * state.solver_tolerance_scale)
+            except Exception:
+                pass
+
+    def _apply_contact_randomization(self, model: Any) -> None:
+        state = self.randomization_state
+        for geom_name, solref in self._baseline_geom_solref.items():
+            try:
+                geom = model.geom(geom_name)
+                randomized_solref = solref.copy()
+                if randomized_solref.size >= 1:
+                    randomized_solref[0] = max(1e-5, randomized_solref[0] * state.contact_solref_timeconst_scale)
+                if randomized_solref.size >= 2:
+                    randomized_solref[1] = max(
+                        1e-5,
+                        randomized_solref[1] * state.contact_solref_dampratio_scale,
+                    )
+                geom.solref = randomized_solref
+                geom.solimp = self._randomized_solimp(self._baseline_geom_solimp[geom_name])
+                geom.margin = max(0.0, self._baseline_geom_margin[geom_name] * state.contact_margin_scale)
+            except Exception:
+                continue
+
+    def _randomized_solimp(self, solimp: np.ndarray) -> np.ndarray:
+        randomized = solimp.copy()
+        scale = self.randomization_state.contact_solimp_scale
+        if randomized.size >= 1:
+            randomized[0] = float(np.clip(randomized[0] * scale, 1e-4, 0.999))
+        if randomized.size >= 2:
+            randomized[1] = float(np.clip(randomized[1] * scale, randomized[0] + 1e-4, 0.9999))
+        if randomized.size >= 3:
+            randomized[2] = max(1e-6, randomized[2] * scale)
+        if randomized.size >= 4:
+            randomized[3] = float(np.clip(randomized[3], 1e-4, 0.9999))
+        if randomized.size >= 5:
+            randomized[4] = max(1e-3, randomized[4])
+        return randomized
+
+    def _delayed_action(self, action: np.ndarray) -> np.ndarray:
+        delay_steps = max(0, int(self.randomization_state.action_delay_steps))
+        max_len = delay_steps + 1
+        self.action_delay_buffer.append(action.copy())
+        if len(self.action_delay_buffer) > max_len:
+            self.action_delay_buffer = self.action_delay_buffer[-max_len:]
+        if len(self.action_delay_buffer) <= delay_steps:
+            return self.action_delay_buffer[0].copy()
+        return self.action_delay_buffer[-delay_steps - 1].copy()
+
+    def _reset_action_delay_buffer(self) -> None:
+        delay_steps = max(0, int(self.randomization_state.action_delay_steps))
+        zero_action = np.zeros(self.num_actions, dtype=np.float64)
+        self.action_delay_buffer = [zero_action.copy() for _ in range(delay_steps + 1)]
+
+    def _maybe_apply_push_disturbance(self) -> None:
+        if self.push_interval_steps <= 0 or self.episode_length <= 0:
+            return
+        if self.episode_length % self.push_interval_steps != 0:
+            return
+        low, high = self.randomizer.cfg.push_velocity_range
+        yaw_low, yaw_high = self.randomizer.cfg.push_yaw_velocity_range
+        data = getattr(getattr(self, "gym", None), "_mjData", None) or self.data
+        data.qvel[self.base_qvel_offset : self.base_qvel_offset + 2] += self.rng.uniform(low, high, size=2)
+        data.qvel[self.base_qvel_offset + 5] += self.rng.uniform(yaw_low, yaw_high)
+        self.mj_forward()
+        self.update_data()
+
+    def _push_interval_steps(self) -> int:
+        interval_s = float(self.cfg.get("randomization", {}).get("push_interval_s", 0.0))
+        if interval_s <= 0.0:
+            return 0
+        return max(1, int(round(interval_s / self.control_dt)))
+
+    def _randomization_observation(self) -> np.ndarray:
+        state = self.randomization_state
+        solver_iterations = 0.0 if state.solver_iterations is None else float(state.solver_iterations) / 100.0
+        return np.array(
+            [
+                state.friction_scale,
+                state.base_mass_delta,
+                state.base_inertia_scale,
+                *state.base_com_offset,
+                state.kp_scale,
+                state.kd_scale,
+                state.torque_scale,
+                float(state.action_delay_steps),
+                solver_iterations,
+                state.solver_tolerance_scale,
+                state.contact_solref_timeconst_scale,
+                state.contact_solref_dampratio_scale,
+                state.contact_solimp_scale,
+                state.contact_margin_scale,
+            ],
+            dtype=np.float64,
+        )
+
+    def _local_mujoco_model(self) -> Any | None:
+        gym = getattr(self, "gym", None)
+        return getattr(gym, "_mjModel", None)

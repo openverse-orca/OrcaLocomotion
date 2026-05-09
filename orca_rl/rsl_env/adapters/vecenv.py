@@ -31,25 +31,37 @@ class OrcaRslRlVecEnv(VecEnv):
         scene_cfg = dict(task_cfg.get("scene_binding", {}))
         resolver = _load_scene_binding_resolver(scene_cfg)
         addresses = task_cfg.get("orcagym_addresses") or ["localhost:50051"]
-        for env_index, address in enumerate(addresses):
+        desired_num_envs = int(task_cfg.get("num_envs") or len(addresses))
+        if desired_num_envs <= 0:
+            raise ValueError("Task config `num_envs` must be a positive integer.")
+        env_counts = _split_num_envs(desired_num_envs, len(addresses))
+        env_index = 0
+        for address, env_count in zip(addresses, env_counts):
+            if env_count <= 0:
+                continue
             binding = _call_scene_binding_resolver(
                 resolver,
                 scene_cfg=scene_cfg,
                 orcagym_addr=address,
                 time_step=float(task_cfg["sim"]["time_step"]),
+                num_envs=env_count,
             )
-            task = OrcaLocomotionTask(
-                cfg=task_cfg,
-                orcagym_addr=address,
-                agent_name=binding.agent_name,
-                robot_config=binding.robot_config,
-                render_mode=render_mode or task_cfg.get("sim", {}).get("render_mode", "none"),
-                env_id=f"{task_cfg.get('name', 'locomotion')}-OrcaGym-{env_index:03d}",
-            )
-            self.tasks.append(task)
+            for agent_name in binding.agent_names:
+                task = OrcaLocomotionTask(
+                    cfg=task_cfg,
+                    orcagym_addr=address,
+                    agent_name=agent_name,
+                    robot_config=binding.robot_config,
+                    render_mode=render_mode or task_cfg.get("sim", {}).get("render_mode", "none"),
+                    env_id=f"{task_cfg.get('name', 'locomotion')}-OrcaGym-{env_index:03d}",
+                )
+                self.tasks.append(task)
+                env_index += 1
 
         if not self.tasks:
             raise ValueError("At least one OrcaGym address is required for RSL-RL training.")
+        if len(self.tasks) != desired_num_envs:
+            raise ValueError(f"Expected {desired_num_envs} envs, resolved {len(self.tasks)} envs from OrcaLab scene.")
 
         self.num_envs = len(self.tasks)
         self.num_actions = self.tasks[0].num_actions
@@ -141,10 +153,12 @@ def _call_scene_binding_resolver(
     scene_cfg: dict[str, Any],
     orcagym_addr: str,
     time_step: float,
+    num_envs: int,
 ) -> Any:
     kwargs = {
         "orcagym_addr": orcagym_addr,
         "time_step": time_step,
+        "num_envs": num_envs,
         **{key: value for key, value in scene_cfg.items() if key != "resolver"},
     }
     signature = inspect.signature(resolver)
@@ -152,3 +166,11 @@ def _call_scene_binding_resolver(
         return resolver(**kwargs)
     accepted_kwargs = {key: value for key, value in kwargs.items() if key in signature.parameters}
     return resolver(**accepted_kwargs)
+
+
+def _split_num_envs(num_envs: int, num_addresses: int) -> list[int]:
+    if num_addresses <= 0:
+        raise ValueError("At least one OrcaGym address is required.")
+    base = num_envs // num_addresses
+    remainder = num_envs % num_addresses
+    return [base + (1 if index < remainder else 0) for index in range(num_addresses)]

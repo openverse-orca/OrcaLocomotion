@@ -165,6 +165,7 @@ class LocomotionEnvCfg:
     name: str
     robot: str
     rsl_rl_config: str
+    num_envs: int = 1
     device: str = "cuda:0"
     orcagym_addresses: tuple[str, ...] = ("localhost:50051",)
     seed: int = 1
@@ -194,6 +195,7 @@ class LocomotionEnvCfg:
         return {
             "name": self.name,
             "robot": self.robot,
+            "num_envs": self.num_envs,
             "device": self.device,
             "orcagym_addresses": list(self.orcagym_addresses),
             "rsl_rl_config": self.rsl_rl_config,
@@ -230,7 +232,8 @@ class LocomotionEnvCfg:
 
     def _legacy_rewards(self) -> dict[str, Any]:
         rewards = self.rewards
-        return {
+        foot_clearance = rewards.get("foot_clearance")
+        data = {
             "tracking_lin_vel": float(rewards["track_linear_velocity"].weight or 0.0),
             "tracking_ang_vel": float(rewards["track_angular_velocity"].weight or 0.0),
             "lin_vel_sigma": float(rewards["track_linear_velocity"].params.get("sigma", 0.25)),
@@ -245,6 +248,19 @@ class LocomotionEnvCfg:
             "termination": float(rewards["termination"].weight or 0.0),
             "target_height": float(rewards["base_height_l2"].params.get("target_height", 0.34)),
         }
+        if "feet_air_time" in rewards:
+            data["feet_air_time"] = float(rewards["feet_air_time"].weight or 0.0)
+        if foot_clearance is not None:
+            data["foot_clearance"] = float(foot_clearance.weight or 0.0)
+            data["target_foot_clearance"] = float(foot_clearance.params.get("target_height", 0.08))
+        if "body_ang_vel_l2" in rewards:
+            data["body_ang_vel"] = float(rewards["body_ang_vel_l2"].weight or 0.0)
+        if "stand_still" in rewards:
+            data["stand_still"] = float(rewards["stand_still"].weight or 0.0)
+            data["command_deadzone"] = float(rewards["stand_still"].params.get("command_deadzone", 0.1))
+        if "joint_deviation_l1" in rewards:
+            data["joint_deviation"] = float(rewards["joint_deviation_l1"].weight or 0.0)
+        return data
 
     def _legacy_termination(self) -> dict[str, Any]:
         fell_over = self.terminations["fell_over"]
@@ -254,6 +270,7 @@ class LocomotionEnvCfg:
             "max_base_height": float(base_height.params["max_base_height"]),
             "max_tilt_rad": float(fell_over.params["max_tilt_rad"]),
             "terminate_on_base_contact": bool(self.terminations["base_contact"].params["enabled"]),
+            "terminate_on_illegal_contact": "illegal_contact" in self.terminations,
         }
 
     def _manager_metadata(self) -> dict[str, Any]:
@@ -332,6 +349,7 @@ class RslRlOnPolicyRunnerCfg:
     actor: RslRlModelCfg
     critic: RslRlModelCfg
     algorithm: RslRlPpoAlgorithmCfg
+    experiment_name: str
     run_name: str
     save_interval: int = 100
     num_steps_per_env: int = 24
@@ -352,6 +370,7 @@ class RslRlOnPolicyRunnerCfg:
                 "save_interval": self.save_interval,
                 "logger": self.logger,
                 "wandb_project": self.wandb_project,
+                "experiment_name": self.experiment_name,
                 "run_name": self.run_name,
                 "check_for_nan": self.check_for_nan,
                 "algorithm": self.algorithm.to_dict(),

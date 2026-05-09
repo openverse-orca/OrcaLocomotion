@@ -21,8 +21,12 @@ class LocomotionTaskState:
     foot_pos_world: np.ndarray
     foot_vel_world: np.ndarray
     foot_contacts: np.ndarray
+    foot_air_time: np.ndarray
+    first_foot_contact: np.ndarray
+    foot_ground_heights: np.ndarray
     friction_scale: float
     base_mass_delta: float
+    domain_randomization: np.ndarray
     height_scan: np.ndarray
 
 
@@ -85,7 +89,7 @@ class LocomotionObservationBuilder:
             foot_heights,
             foot_vel_body.reshape(-1),
             state.last_torque,
-            np.array([state.friction_scale, state.base_mass_delta], dtype=np.float64),
+            state.domain_randomization,
         ]
         if height_scan.size:
             privileged_terms.append(height_scan)

@@ -11,6 +11,7 @@ from orca_rl.utils import (
     explain_missing_runtime_dependency,
     load_task_and_train_cfg,
     make_log_dir,
+    PROJECT_ROOT,
     save_checkpoint_aliases,
 )
 
@@ -25,6 +26,7 @@ def main() -> None:
         help="Python cfg file. Use file.py:factory_name to select a non-default factory such as rough terrain.",
     )
     parser.add_argument("--num-iterations", type=int, default=None)
+    parser.add_argument("--num-envs", type=int, default=None, help="Override RSL-RL vectorized environment count.")
     parser.add_argument("--resume", type=str, default=None, help="Optional RSL-RL checkpoint path.")
     parser.add_argument("--device", default=None)
     parser.add_argument("--log-name", default=None)
@@ -42,6 +44,10 @@ def main() -> None:
 
     task_cfg, train_cfg = load_task_and_train_cfg(args.config)
     apply_remote_override(task_cfg, args.remote)
+    if args.num_envs is not None:
+        if args.num_envs <= 0:
+            raise ValueError("--num-envs must be a positive integer.")
+        task_cfg["num_envs"] = int(args.num_envs)
     logger_override = "wandb" if args.wandb else args.logger
     apply_logging_overrides(
         train_cfg,
@@ -61,8 +67,17 @@ def main() -> None:
         raise explain_missing_runtime_dependency(exc) from exc
 
     device = args.device or task_cfg.get("device", "cuda:0")
-    iterations = int(args.num_iterations or task_cfg.get("train", {}).get("num_learning_iterations", 1500))
-    log_dir = make_log_dir(args.log_name, task_name=str(task_cfg.get("name", "locomotion")))
+    iterations = int(
+        args.num_iterations
+        or train_cfg.get("max_iterations")
+        or task_cfg.get("train", {}).get("num_learning_iterations", 1500)
+    )
+    log_dir = make_log_dir(
+        args.log_name,
+        task_name=str(task_cfg.get("name", "locomotion")),
+        experiment_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "locomotion")),
+        run_name=str(train_cfg.get("run_name") or ""),
+    )
 
     try:
         env = make_locomotion_vec_env(
@@ -83,7 +98,7 @@ def main() -> None:
             iterations=iterations,
         )
         runner = OnPolicyRunner(env, train_cfg, log_dir=str(log_dir), device=device)
-        runner.add_git_repo_to_log(str(log_dir.parents[2]))
+        runner.add_git_repo_to_log(str(PROJECT_ROOT))
         if args.resume:
             runner.load(args.resume, map_location=device)
         runner.learn(num_learning_iterations=iterations, init_at_random_ep_len=False)

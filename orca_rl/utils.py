@@ -11,8 +11,7 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_LOG_ROOT = PROJECT_ROOT / "trained_models_tmp" / "rsl_rl_locomotion"
-LEGACY_GO2_LOG_ROOT = PROJECT_ROOT / "trained_models_tmp" / "rsl_rl_go2_flat_velocity"
+DEFAULT_LOG_ROOT = PROJECT_ROOT / "logs" / "rsl_rl"
 
 
 def ensure_project_root_on_path() -> None:
@@ -188,16 +187,24 @@ def _split_host_port(address: str) -> tuple[str, int]:
     return host, int(port_text)
 
 
-def make_log_dir(prefix: str | None = None, task_name: str = "locomotion") -> Path:
+def make_log_dir(
+    prefix: str | None = None,
+    task_name: str = "locomotion",
+    experiment_name: str | None = None,
+    run_name: str | None = None,
+) -> Path:
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    name = prefix or f"{task_name}_{timestamp}"
-    path = DEFAULT_LOG_ROOT / name
+    experiment = experiment_name or task_name
+    name = prefix or timestamp
+    if prefix is None and run_name:
+        name = f"{name}_{run_name}"
+    path = DEFAULT_LOG_ROOT / experiment / name
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def find_latest_checkpoint(root: str | Path | None = None, task_name: str | None = None) -> Path:
-    search_roots = [Path(root)] if root is not None else [DEFAULT_LOG_ROOT, LEGACY_GO2_LOG_ROOT]
+    search_roots = [Path(root)] if root is not None else [DEFAULT_LOG_ROOT]
     existing_roots = [path for path in search_roots if path.exists()]
     if not existing_roots:
         raise FileNotFoundError(f"No RSL-RL checkpoint root found: {search_roots[0]}")

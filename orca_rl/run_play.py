@@ -45,7 +45,9 @@ def main() -> None:
         raise explain_missing_runtime_dependency(exc) from exc
 
     device = args.device or task_cfg.get("play", {}).get("device", "cpu")
-    checkpoint = args.ckpt or str(find_latest_checkpoint(task_name=str(task_cfg.get("name", "")) or None))
+    checkpoint = args.ckpt or str(
+        find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)
+    )
     task_cfg.setdefault("sim", {})["render_mode"] = "human"
     try:
         env = make_locomotion_vec_env(task_cfg, device=device, render_mode="human")

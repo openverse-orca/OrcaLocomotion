@@ -35,11 +35,15 @@ class TerrainRuntime:
         scan_cfg: TerrainScanConfig,
         physics_enabled: bool,
         export_path: str | None,
+        terrain_cfg: dict[str, Any] | None = None,
+        rng: np.random.Generator | None = None,
     ) -> None:
         self.height_field = height_field
         self.scan_cfg = scan_cfg
         self.physics_enabled = physics_enabled
         self.export_path = export_path
+        self.terrain_cfg = terrain_cfg or {"terrain_type": "plane"}
+        self.rng = rng
         self.exported_mesh_path: Path | None = None
 
     @classmethod
@@ -53,6 +57,8 @@ class TerrainRuntime:
             scan_cfg=scan_cfg,
             physics_enabled=bool(terrain_cfg.get("physics_enabled", False)),
             export_path=terrain_cfg.get("export_path"),
+            terrain_cfg=terrain_cfg,
+            rng=rng,
         )
         if runtime.export_path:
             runtime.exported_mesh_path = runtime.export_mesh(runtime.export_path)
@@ -60,6 +66,15 @@ class TerrainRuntime:
 
     def height_at(self, x: float, y: float) -> float:
         return self.height_field.height_at(x, y)
+
+    def resample(self) -> None:
+        if self.rng is None:
+            return
+        if self.terrain_cfg.get("terrain_type", "plane") == "plane":
+            return
+        self.height_field = generate_height_field(self.terrain_cfg, self.rng)
+        if self.export_path:
+            self.exported_mesh_path = self.export_mesh(self.export_path)
 
     def scan(self, base_pos: np.ndarray, base_quat: np.ndarray) -> np.ndarray:
         if not self.scan_cfg.enabled:

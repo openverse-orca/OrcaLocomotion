@@ -14,7 +14,27 @@ def randomize_friction():
 
 
 def randomize_body_mass():
-    """Sample base-mass randomization state exposed to privileged observations."""
+    """Sample and apply reset-time base mass, inertia, and COM randomization."""
+
+
+def randomize_actuator_properties():
+    """Sample PD gain and motor-strength randomization."""
+
+
+def randomize_action_latency():
+    """Sample a bounded action delay in control steps."""
+
+
+def randomize_solver_params():
+    """Sample local MuJoCo solver parameter randomization."""
+
+
+def randomize_contact_params():
+    """Sample local MuJoCo contact parameter randomization."""
+
+
+def push_robot():
+    """Apply periodic base-velocity perturbations during the episode."""
 
 
 def randomize_terrain():

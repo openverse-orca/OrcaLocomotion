@@ -53,6 +53,7 @@ def make_flat_velocity_env_cfg(
         name=name,
         robot=robot,
         rsl_rl_config=rsl_rl_config,
+        num_envs=1,
         seed=seed,
         sim={
             "time_step": time_step,
@@ -171,6 +172,44 @@ def make_flat_velocity_env_cfg(
                 mode="startup",
                 params={"base_mass_delta_range": (-0.5, 1.5)},
             ),
+            "randomize_actuator_properties": EventTermCfg(
+                func=mdp.randomize_actuator_properties,
+                mode="startup",
+                params={
+                    "kp_scale_range": (0.9, 1.1),
+                    "kd_scale_range": (0.9, 1.1),
+                    "torque_scale_range": (0.9, 1.1),
+                },
+            ),
+            "randomize_action_latency": EventTermCfg(
+                func=mdp.randomize_action_latency,
+                mode="startup",
+                params={"max_action_delay_steps": 2},
+            ),
+            "randomize_solver_params": EventTermCfg(
+                func=mdp.randomize_solver_params,
+                mode="startup",
+                params={"solver_iterations_range": (40, 80), "solver_tolerance_scale_range": (0.5, 2.0)},
+            ),
+            "randomize_contact_params": EventTermCfg(
+                func=mdp.randomize_contact_params,
+                mode="startup",
+                params={
+                    "contact_solref_timeconst_scale_range": (0.8, 1.2),
+                    "contact_solref_dampratio_scale_range": (0.8, 1.2),
+                    "contact_solimp_scale_range": (0.9, 1.1),
+                    "contact_margin_scale_range": (0.8, 1.2),
+                },
+            ),
+            "push_robot": EventTermCfg(
+                func=mdp.push_robot,
+                mode="interval",
+                params={
+                    "push_interval_s": 8.0,
+                    "push_velocity_range": (-0.4, 0.4),
+                    "push_yaw_velocity_range": (-0.3, 0.3),
+                },
+            ),
         },
         curriculum={},
         metrics={
@@ -187,8 +226,23 @@ def make_flat_velocity_env_cfg(
             "enabled": True,
             "friction_range": (0.7, 1.3),
             "base_mass_delta_range": (-0.5, 1.5),
+            "base_inertia_scale_range": (0.9, 1.1),
+            "base_com_offset_range": (-0.02, 0.02),
+            "kp_scale_range": (0.9, 1.1),
+            "kd_scale_range": (0.9, 1.1),
+            "torque_scale_range": (0.9, 1.1),
+            "max_action_delay_steps": 2,
+            "push_interval_s": 8.0,
+            "push_velocity_range": (-0.4, 0.4),
+            "push_yaw_velocity_range": (-0.3, 0.3),
+            "solver_iterations_range": (40, 80),
+            "solver_tolerance_scale_range": (0.5, 2.0),
+            "contact_solref_timeconst_scale_range": (0.8, 1.2),
+            "contact_solref_dampratio_scale_range": (0.8, 1.2),
+            "contact_solimp_scale_range": (0.9, 1.1),
+            "contact_margin_scale_range": (0.8, 1.2),
         },
-        train={"num_learning_iterations": 1500},
+        train={"num_learning_iterations": 30_000},
         play={"device": "cpu"},
         eval={"device": "cpu"},
         export={"enabled": True, "jit": True, "onnx": True},
@@ -298,6 +352,12 @@ def make_rough_velocity_env_cfg(
         params={"target_height": 0.08, "sensor_name": "terrain_scan"},
     )
     cfg.rewards["body_ang_vel_l2"] = TermCfg(func=mdp.body_ang_vel_l2, weight=-0.05)
+    cfg.rewards["stand_still"] = TermCfg(
+        func=mdp.stand_still,
+        weight=-0.5,
+        params={"command_deadzone": 0.1},
+    )
+    cfg.rewards["joint_deviation_l1"] = TermCfg(func=mdp.joint_deviation_l1, weight=-0.02)
     cfg.terminations["illegal_contact"] = TermCfg(
         func=mdp.illegal_contact,
         params={"sensor_name": "nonfoot_ground_contact", "force_threshold": 10.0},

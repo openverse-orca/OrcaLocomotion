@@ -76,7 +76,7 @@ def unitree_g1_flat_env_cfg(play: bool = False) -> LocomotionEnvCfg:
         time_step=0.001,
         frame_skip=20,
         decimation=1,
-        render_mode="human",
+        render_mode="none",
         action_safety_scale=0.75,
         action_max_delta=G1_MAX_DELTA,
         command_ranges=UniformVelocityCommandCfg.Ranges(
@@ -116,7 +116,7 @@ def unitree_g1_rough_env_cfg(play: bool = False) -> LocomotionEnvCfg:
         time_step=0.001,
         frame_skip=20,
         decimation=1,
-        render_mode="human",
+        render_mode="none",
         action_safety_scale=0.72,
         action_max_delta=G1_MAX_DELTA,
         command_ranges=UniformVelocityCommandCfg.Ranges(
@@ -141,7 +141,7 @@ def unitree_g1_rough_env_cfg(play: bool = False) -> LocomotionEnvCfg:
             "termination": -3.0,
         },
     )
-    cfg.train["num_learning_iterations"] = 2500
+    cfg.train["num_learning_iterations"] = 30_000
     return _apply_g1_common_overrides(cfg, play)
 
 

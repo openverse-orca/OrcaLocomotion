@@ -4,8 +4,13 @@ from .actions import joint_position
 from .commands import uniform_velocity_command
 from .curriculums import terrain_levels
 from .events import (
+    push_robot,
+    randomize_action_latency,
+    randomize_actuator_properties,
     randomize_body_mass,
+    randomize_contact_params,
     randomize_friction,
+    randomize_solver_params,
     randomize_terrain,
     reset_joints_by_offset,
     reset_root_state_uniform,
@@ -66,8 +71,13 @@ __all__ = [
     "mean_action_acc",
     "orientation_l2",
     "projected_gravity",
+    "push_robot",
+    "randomize_action_latency",
+    "randomize_actuator_properties",
     "randomize_body_mass",
+    "randomize_contact_params",
     "randomize_friction",
+    "randomize_solver_params",
     "randomize_terrain",
     "reset_joints_by_offset",
     "reset_root_state_uniform",

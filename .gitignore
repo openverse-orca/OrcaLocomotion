@@ -7,8 +7,8 @@ __pycache__/
 .venv/
 venv/
 trained_models_tmp/
+logs/
 runs/
 wandb/
 *.pt
 *.onnx
-

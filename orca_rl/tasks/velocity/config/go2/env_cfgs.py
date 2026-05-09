@@ -114,7 +114,7 @@ def unitree_go2_rough_env_cfg(play: bool = False) -> LocomotionEnvCfg:
             "termination": -2.0,
         },
     )
-    cfg.train["num_learning_iterations"] = 2500
+    cfg.train["num_learning_iterations"] = 30_000
     return _apply_go2_common_overrides(cfg, play)
 
 

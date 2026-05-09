@@ -14,8 +14,12 @@ from .robot_configs import GO2_CONFIG
 
 @dataclass(frozen=True)
 class SceneBinding:
-    agent_name: str
+    agent_names: list[str]
     robot_config: dict
+
+    @property
+    def agent_name(self) -> str:
+        return self.agent_names[0]
 
 
 G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda"
@@ -249,8 +253,13 @@ def resolve_go2_scene_binding(
     orcagym_addr: str,
     time_step: float,
     min_count: int = 1,
-    max_count: int = 1,
+    max_count: int | None = 1,
+    num_envs: int | None = None,
 ) -> SceneBinding:
+    desired_count = int(num_envs or min_count)
+    if num_envs is not None:
+        min_count = desired_count
+        max_count = desired_count
     robot_config = deepcopy(GO2_CONFIG)
     template = build_suffix_template(
         model_name="go2",
@@ -265,32 +274,37 @@ def resolve_go2_scene_binding(
         time_step=time_step,
         template=template,
     )
-    match = require_complete_matches(
+    matches = require_complete_matches(
         report,
         min_count=min_count,
         max_count=max_count,
         allow_empty_prefix=False,
         orcagym_addr=orcagym_addr,
-    )[0]
+    )
 
-    agent_name = match.agent_name
+    agent_names = [match.agent_name for match in matches[:desired_count]]
     robot_config["model_name"] = "go2"
-    robot_config["log_agent_names"] = [agent_name]
-    robot_config["visualize_command_agent_names"] = [agent_name]
-    robot_config["playable_agent_name"] = agent_name
-    return SceneBinding(agent_name=agent_name, robot_config=robot_config)
+    robot_config["log_agent_names"] = agent_names
+    robot_config["visualize_command_agent_names"] = agent_names
+    robot_config["playable_agent_name"] = agent_names[0]
+    return SceneBinding(agent_names=agent_names, robot_config=robot_config)
 
 
 def resolve_g1_scene_binding(
     orcagym_addr: str,
     time_step: float,
     min_count: int = 1,
-    max_count: int = 1,
+    max_count: int | None = 1,
+    num_envs: int | None = None,
     *,
     spawn_if_missing: bool = False,
     spawn_agent_name: str = "g1_000",
     asset_path: str = G1_AGENT_ASSET_PATH,
 ) -> SceneBinding:
+    desired_count = int(num_envs or min_count)
+    if num_envs is not None:
+        min_count = desired_count
+        max_count = desired_count
     robot_config = _build_g1_robot_config()
     template = build_suffix_template(
         model_name="G1",
@@ -303,9 +317,14 @@ def resolve_g1_scene_binding(
         time_step=time_step,
         template=template,
     )
-    if spawn_if_missing and not report.complete_matches:
+    if spawn_if_missing and len(report.complete_matches) < desired_count:
         try:
-            publish_g1_scene(orcagym_addr=orcagym_addr, agent_name=spawn_agent_name, asset_path=asset_path)
+            publish_g1_scene(
+                orcagym_addr=orcagym_addr,
+                agent_name=spawn_agent_name,
+                asset_path=asset_path,
+                agent_count=desired_count,
+            )
         except Exception as exc:
             raise RuntimeError(
                 "G1 auto-publish failed. The current OrcaStudio asset library does not know the configured "
@@ -318,25 +337,31 @@ def resolve_g1_scene_binding(
             template=template,
         )
 
-    match = require_complete_matches(
+    matches = require_complete_matches(
         report,
         min_count=min_count,
         max_count=max_count,
         allow_empty_prefix=False,
         orcagym_addr=orcagym_addr,
-    )[0]
+    )
 
-    agent_name = match.agent_name
+    agent_names = [match.agent_name for match in matches[:desired_count]]
     robot_config["model_name"] = "G1"
-    robot_config["log_agent_names"] = [agent_name]
-    robot_config["visualize_command_agent_names"] = [agent_name]
-    robot_config["playable_agent_name"] = agent_name
-    return SceneBinding(agent_name=agent_name, robot_config=robot_config)
+    robot_config["log_agent_names"] = agent_names
+    robot_config["visualize_command_agent_names"] = agent_names
+    robot_config["playable_agent_name"] = agent_names[0]
+    return SceneBinding(agent_names=agent_names, robot_config=robot_config)
 
 
-def publish_g1_scene(orcagym_addr: str, agent_name: str, asset_path: str = G1_AGENT_ASSET_PATH) -> None:
+def publish_g1_scene(
+    orcagym_addr: str,
+    agent_name: str,
+    asset_path: str = G1_AGENT_ASSET_PATH,
+    agent_count: int = 1,
+) -> None:
     from orca_gym.scene.orca_gym_scene import Actor, OrcaGymScene
     from orca_gym.utils.rotations import euler2quat
+    import numpy as np
 
     temp_scene = OrcaGymScene(orcagym_addr)
     try:
@@ -348,14 +373,20 @@ def publish_g1_scene(orcagym_addr: str, agent_name: str, asset_path: str = G1_AG
 
     scene = OrcaGymScene(orcagym_addr)
     try:
-        agent = Actor(
-            name=agent_name,
-            asset_path=asset_path.replace("//", "/"),
-            position=[0, 0, 0],
-            rotation=euler2quat([0, 0, 0]),
-            scale=1.0,
-        )
-        scene.add_actor(agent)
+        grid_width = int(np.ceil(np.sqrt(max(1, agent_count))))
+        spacing = 1.5
+        x0 = -0.5 * spacing * (grid_width - 1)
+        y0 = -0.5 * spacing * (grid_width - 1)
+        for index in range(max(1, agent_count)):
+            name = agent_name if agent_count == 1 else f"{agent_name.rsplit('_', 1)[0]}_{index:03d}"
+            agent = Actor(
+                name=name,
+                asset_path=asset_path.replace("//", "/"),
+                position=[x0 + spacing * (index % grid_width), y0 + spacing * (index // grid_width), 0],
+                rotation=euler2quat([0, 0, 0]),
+                scale=1.0,
+            )
+            scene.add_actor(agent)
         scene.publish_scene()
         time.sleep(3)
     finally:
