@@ -32,7 +32,7 @@ Example usage:
 
 ```bash
 python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --config Unitree-G1-Flat \
   --headless
 ```
 
@@ -65,12 +65,12 @@ Done. README examples now include:
 ```bash
 # Fast headless training
 python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --config Unitree-G1-Flat \
   --headless
 
 # Visual debugging / playback
 python -m orca_rl.run_play \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --config Unitree-G1-Flat \
   --ckpt <path_to_checkpoint>
 ```
 
@@ -78,4 +78,10 @@ python -m orca_rl.run_play \
 
 This is important because training with the simulator window open is currently too slow. Headless mode should be the default choice for large-scale RL training.
 
-Follow-up completed: G1 headless training now uses a generated local MJCF batch by default, so it can run without OrcaLab viewport rendering, without a gRPC server, and without publishing actors into the interactive scene.
+Follow-up completed:
+
+- G1 headless training now uses a generated local MJCF batch by default, so it can run without OrcaLab viewport rendering, without a gRPC server, and without publishing actors into the interactive scene.
+- G1 rough local MJCF training now inserts the generated rough heightfield into MuJoCo as a physical `hfield` collision geom.
+- Standard registered task names are available through `--config Unitree-G1-Flat`, `Unitree-G1-Rough`, `Unitree-GO2-Flat`, and `Unitree-GO2-Rough`.
+- `run_play` defaults back to the OrcaLab scene path for visual inspection. For G1 it disables local MJCF, uses the scene binding resolver, and can auto-publish the configured G1 asset if the scene is missing one.
+- `run_play --local-mujoco` keeps the generated local MuJoCo playback path available for debugging without OrcaLab scene binding.
