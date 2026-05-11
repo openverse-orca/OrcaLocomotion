@@ -78,7 +78,10 @@ class MjWarpRuntime:
         self.actuator_force = self.wp.to_torch(self.wp_data.actuator_force)
         self.sensordata = self.wp.to_torch(self.wp_data.sensordata)
         self.time = self.wp.to_torch(self.wp_data.time)
+        self._step_graphs: dict[int, Any] = {}
+        self._forward_graph: Any | None = None
         self.sync_from_cpu(data)
+        self._capture_forward_graph()
 
     @property
     def info(self) -> MjWarpRuntimeInfo:
@@ -95,13 +98,24 @@ class MjWarpRuntime:
         self.ctrl[0, : value.numel()] = value
 
     def step(self, nstep: int = 1) -> None:
+        nstep = int(nstep)
         with self.wp.ScopedDevice(self.device):
-            for _ in range(int(nstep)):
-                self.mjwarp.step(self.wp_model, self.wp_data)
+            graph = self._step_graphs.get(nstep)
+            if graph is None:
+                self._capture_step_graph(nstep)
+                graph = self._step_graphs.get(nstep)
+            if graph is not None:
+                self.wp.capture_launch(graph)
+            else:
+                for _ in range(nstep):
+                    self.mjwarp.step(self.wp_model, self.wp_data)
 
     def forward(self) -> None:
         with self.wp.ScopedDevice(self.device):
-            self.mjwarp.forward(self.wp_model, self.wp_data)
+            if self._forward_graph is not None:
+                self.wp.capture_launch(self._forward_graph)
+            else:
+                self.mjwarp.forward(self.wp_model, self.wp_data)
 
     def sync_from_cpu(self, data: Any) -> None:
         self.qpos[0] = self.torch.as_tensor(np.asarray(data.qpos), dtype=self.qpos.dtype, device=self.qpos.device)
@@ -124,3 +138,33 @@ class MjWarpRuntime:
             data.sensordata[:] = self.sensordata[0].detach().cpu().numpy().astype(np.float64, copy=False)
         if recompute_contacts:
             self.mujoco.mj_forward(self.model, data)
+
+    def _capture_step_graph(self, nstep: int) -> None:
+        if nstep <= 0 or not self._can_capture_graphs():
+            return
+        try:
+            with self.wp.ScopedDevice(self.device):
+                with self.wp.ScopedCapture() as capture:
+                    for _ in range(nstep):
+                        self.mjwarp.step(self.wp_model, self.wp_data)
+                self._step_graphs[nstep] = capture.graph
+        except Exception as exc:
+            print(f"[orca_rl.mjwarp] CUDA graph capture disabled for nstep={nstep}: {exc}")
+
+    def _capture_forward_graph(self) -> None:
+        if not self._can_capture_graphs():
+            return
+        try:
+            with self.wp.ScopedDevice(self.device):
+                with self.wp.ScopedCapture() as capture:
+                    self.mjwarp.forward(self.wp_model, self.wp_data)
+                self._forward_graph = capture.graph
+        except Exception as exc:
+            print(f"[orca_rl.mjwarp] forward CUDA graph capture disabled: {exc}")
+
+    def _can_capture_graphs(self) -> bool:
+        try:
+            device = self.wp.get_device(self.device)
+            return bool(device.is_cuda and self.wp.is_mempool_enabled(device))
+        except Exception:
+            return False
