@@ -19,9 +19,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Play a trained Orca locomotion RSL-RL policy.")
     parser.add_argument(
         "--config",
-        default="orca_rl/tasks/velocity/config/go2/env_cfgs.py",
-        help="Python cfg file. Use file.py:factory_name to select a non-default factory such as rough terrain.",
+        default="Unitree-GO2-Flat",
+        help="Registered task name, or Python cfg file. Use file.py:factory_name for a non-default factory.",
     )
+    parser.add_argument("--list-tasks", action="store_true", help="List registered task names and exit.")
     parser.add_argument("--ckpt", default=None, help="RSL-RL checkpoint path, e.g. model_1000.pt.")
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=0, help="0 means run until interrupted.")
@@ -31,6 +32,14 @@ def main() -> None:
         help="Override OrcaGym address, e.g. localhost:50051.",
     )
     args = parser.parse_args()
+
+    if args.list_tasks:
+        from orca_rl.registry import list_tasks
+
+        for spec in list_tasks():
+            suffix = f" - {spec.description}" if spec.description else ""
+            print(f"{spec.name}{suffix}")
+        return
 
     task_cfg, train_cfg = load_task_and_train_cfg(args.config)
     apply_remote_override(task_cfg, args.remote)

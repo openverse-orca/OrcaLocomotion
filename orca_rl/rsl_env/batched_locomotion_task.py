@@ -122,6 +122,16 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self.nu = self.model.nu
         self.ctrl = np.zeros(self.nu, dtype=np.float64)
         self._setup_global_randomization_targets()
+        local_terrain_cfg = self.robot_config.get("local_terrain_cfg")
+        self._shared_terrain_runtime = (
+            TerrainRuntime.from_task_cfg(
+                self.cfg,
+                np.random.default_rng(self._base_seed),
+                terrain_cfg=local_terrain_cfg,
+            )
+            if local_terrain_cfg is not None
+            else None
+        )
         self.agents = [self._setup_agent(index, name) for index, name in enumerate(self.agent_names)]
         self.num_envs = len(self.agents)
         self.num_actions = self.agents[0].action_mapper.num_actions
@@ -263,7 +273,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
             self.episode_lengths[index] = 0
             agent.command = agent.command_sampler.sample()
             agent.randomization_state = agent.randomizer.sample()
-            if self.cfg.get("randomization", {}).get("terrain") == "rough":
+            if self.cfg.get("randomization", {}).get("terrain") == "rough" and not agent.terrain_runtime.physics_enabled:
                 agent.terrain_runtime.resample()
             self._apply_agent_randomization(agent, int(index))
             self._reset_action_delay_buffer(agent)
@@ -391,7 +401,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         )
         command_sampler = FlatVelocityCommandSampler(CommandConfig(**self.cfg.get("commands", {})), rng)
         randomizer = DomainRandomizer(RandomizationConfig(**self.cfg.get("randomization", {})), rng)
-        terrain_runtime = TerrainRuntime.from_task_cfg(self.cfg, rng)
+        terrain_runtime = self._shared_terrain_runtime or TerrainRuntime.from_task_cfg(self.cfg, rng)
         command_resample_steps = max(
             1,
             int(round(float(self.cfg.get("commands", {}).get("resample_time_s", 4.0)) / self.control_dt)),
@@ -609,6 +619,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
                 foot_contacts.fill(0.0)
 
         contacts = self.query_contact_simple()
+        contact_force_threshold = float(self.cfg.get("contacts", {}).get("illegal_force_threshold", 0.0))
         for contact in contacts:
             body1 = self._geom_body_name(contact["Geom1"])
             body2 = self._geom_body_name(contact["Geom2"])
@@ -618,8 +629,9 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
                 base_contacts[env_index] = True
             for env_index in self._body_to_base_envs.get(body2, ()):
                 base_contacts[env_index] = True
-            self._mark_illegal_contacts(illegal_contacts, body1, body2)
-            self._mark_illegal_contacts(illegal_contacts, body2, body1)
+            if self._contact_force_exceeds(contact, contact_force_threshold):
+                self._mark_illegal_contacts(illegal_contacts, body1, body2)
+                self._mark_illegal_contacts(illegal_contacts, body2, body1)
 
         return {
             "foot_contacts": foot_contacts,
@@ -646,6 +658,19 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         for env_index in self._body_to_illegal_envs.get(illegal_body, ()):
             if env_index not in other_robot_envs:
                 illegal_contacts[env_index] = True
+
+    def _contact_force_exceeds(self, contact: dict[str, Any], threshold: float) -> bool:
+        if threshold <= 0.0:
+            return True
+        contact_id = int(contact.get("ID", -1))
+        if contact_id < 0:
+            return True
+        try:
+            forces = self.query_contact_force([contact_id])
+            force = np.asarray(forces[contact_id], dtype=np.float64).reshape(-1)
+        except Exception:
+            return True
+        return bool(np.linalg.norm(force[:3]) >= threshold)
 
     def _sample_base_qpos(self, agent: _AgentRuntime) -> np.ndarray:
         reset_cfg = self.cfg.get("reset", {})

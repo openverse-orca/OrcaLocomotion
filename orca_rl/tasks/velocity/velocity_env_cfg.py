@@ -295,6 +295,7 @@ def make_rough_velocity_env_cfg(
         terrain_generator=TerrainGeneratorCfg(curriculum=True),
         static_friction=0.9,
         dynamic_friction=0.8,
+        physics_enabled=True,
     )
     cfg.sensors["terrain_scan"] = RayCasterCfg(
         name="terrain_scan",
@@ -369,4 +370,5 @@ def make_rough_velocity_env_cfg(
             "height_scan_dim": scan_pattern.num_rays,
         }
     )
+    cfg.contacts["illegal_force_threshold"] = 10.0
     return cfg

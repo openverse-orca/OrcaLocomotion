@@ -38,6 +38,8 @@ class OrcaRslRlVecEnv(VecEnv):
         self.cfg["sim"]["render_mode"] = self.render_mode
 
         scene_cfg = dict(task_cfg.get("scene_binding", {}))
+        scene_cfg.setdefault("terrain_cfg", task_cfg.get("terrain"))
+        scene_cfg.setdefault("terrain_seed", int(task_cfg.get("seed", 1)))
         resolver = _load_scene_binding_resolver(scene_cfg)
         addresses = task_cfg.get("orcagym_addresses") or ["localhost:50051"]
         desired_num_envs = int(task_cfg.get("num_envs") or len(addresses))

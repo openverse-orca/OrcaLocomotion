@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from orca_rl.tasks.velocity.config_types import LocomotionEnvCfg, UniformVelocityCommandCfg
 from orca_rl.tasks.velocity.velocity_env_cfg import make_flat_velocity_env_cfg, make_rough_velocity_env_cfg
 
@@ -26,6 +28,8 @@ def _apply_go2_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> Locomotion
         "min_count": 1,
         "max_count": 1,
     }
+    if cfg.terrain is not None:
+        cfg.terrain = replace(cfg.terrain, physics_enabled=False)
     cfg.rewards["base_height_l2"].params["asset_cfg"].body_names = ("base",)
     cfg.rewards["feet_slip"].params["asset_cfg"].site_names = ("FR", "FL", "RR", "RL")
     if "foot_clearance" in cfg.rewards:

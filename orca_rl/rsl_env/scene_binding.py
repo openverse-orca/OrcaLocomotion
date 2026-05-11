@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import os
 import time
 
-from .local_mjcf import build_local_mjcf_batch, resolve_existing_xml_path
+from .local_mjcf import build_local_mjcf_batch, prepare_local_terrain_cfg, resolve_existing_xml_path
 from .model_scanner import (
     build_suffix_template,
     require_complete_matches,
@@ -313,6 +313,8 @@ def resolve_g1_scene_binding(
     local_xml_path: str | None = None,
     local_clone_spacing: float = 2.0,
     local_xml_output_dir: str | None = None,
+    terrain_cfg: dict | None = None,
+    terrain_seed: int = 1,
 ) -> SceneBinding:
     desired_count = int(num_envs or min_count)
     if num_envs is not None:
@@ -322,17 +324,26 @@ def resolve_g1_scene_binding(
     if local_xml_path is not None:
         source_xml_path = resolve_existing_xml_path(local_xml_path, G1_LOCAL_XML_CANDIDATES)
         agent_names = [f"{spawn_agent_name.rsplit('_', 1)[0]}_{index:03d}" for index in range(desired_count)]
+        local_terrain_cfg = prepare_local_terrain_cfg(
+            terrain_cfg,
+            agent_count=desired_count,
+            spacing=float(local_clone_spacing),
+        )
         model_xml_path = build_local_mjcf_batch(
             source_xml_path=source_xml_path,
             agent_names=agent_names,
             spacing=float(local_clone_spacing),
             output_dir=local_xml_output_dir,
+            terrain_cfg=local_terrain_cfg,
+            terrain_seed=int(terrain_seed),
         )
         robot_config["model_name"] = "G1"
         robot_config["log_agent_names"] = agent_names
         robot_config["visualize_command_agent_names"] = agent_names
         robot_config["playable_agent_name"] = agent_names[0]
         robot_config["local_source_xml_path"] = source_xml_path
+        if local_terrain_cfg is not None:
+            robot_config["local_terrain_cfg"] = local_terrain_cfg
         return SceneBinding(
             agent_names=agent_names,
             robot_config=robot_config,

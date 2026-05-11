@@ -47,8 +47,14 @@ class TerrainRuntime:
         self.exported_mesh_path: Path | None = None
 
     @classmethod
-    def from_task_cfg(cls, cfg: dict[str, Any], rng: np.random.Generator) -> "TerrainRuntime":
-        terrain_cfg = cfg.get("terrain") or {"terrain_type": "plane"}
+    def from_task_cfg(
+        cls,
+        cfg: dict[str, Any],
+        rng: np.random.Generator,
+        *,
+        terrain_cfg: dict[str, Any] | None = None,
+    ) -> "TerrainRuntime":
+        terrain_cfg = terrain_cfg or cfg.get("terrain") or {"terrain_type": "plane"}
         sensors = cfg.get("sensors", {})
         height_field = generate_height_field(terrain_cfg, rng)
         scan_cfg = _scan_config(sensors.get("terrain_scan"), cfg.get("observations", {}))
@@ -69,6 +75,8 @@ class TerrainRuntime:
 
     def resample(self) -> None:
         if self.rng is None:
+            return
+        if self.physics_enabled:
             return
         if self.terrain_cfg.get("terrain_type", "plane") == "plane":
             return

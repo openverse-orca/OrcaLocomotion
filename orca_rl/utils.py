@@ -109,6 +109,10 @@ def load_config(path: str | Path, factory_names: tuple[str, ...] = ("CONFIG_FACT
 
 
 def load_task_and_train_cfg(task_config_path: str | Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    from orca_rl.registry import is_registered_task, load_registered_task
+
+    if is_registered_task(str(task_config_path)):
+        return load_registered_task(str(task_config_path))
     task_cfg = load_config(task_config_path, ("TASK_CONFIG_FACTORY", "ENV_CONFIG_FACTORY", "CONFIG_FACTORY"))
     train_cfg_path = _resolve_referenced_config(task_cfg["rsl_rl_config"], task_config_path)
     raw_train_cfg = load_config(train_cfg_path, ("RL_CONFIG_FACTORY", "RUNNER_CONFIG_FACTORY", "CONFIG_FACTORY"))
