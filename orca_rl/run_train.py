@@ -28,6 +28,12 @@ def main() -> None:
     parser.add_argument("--list-tasks", action="store_true", help="List registered task names and exit.")
     parser.add_argument("--num-iterations", type=int, default=None)
     parser.add_argument("--num-envs", type=int, default=None, help="Override RSL-RL vectorized environment count.")
+    parser.add_argument(
+        "--sim-backend",
+        choices=("orca_cpu", "mjwarp"),
+        default=None,
+        help="Physics backend for local headless training. Default keeps OrcaGymLocalEnv CPU MuJoCo.",
+    )
     parser.add_argument("--resume", type=str, default=None, help="Optional RSL-RL checkpoint path.")
     parser.add_argument("--device", default=None)
     parser.add_argument("--log-name", default=None)
@@ -74,6 +80,10 @@ def main() -> None:
         if args.num_envs <= 0:
             raise ValueError("--num-envs must be a positive integer.")
         task_cfg["num_envs"] = int(args.num_envs)
+    if args.sim_backend is not None:
+        task_cfg.setdefault("sim", {})["backend"] = args.sim_backend
+        if args.sim_backend == "mjwarp":
+            task_cfg["sim"]["mjwarp_device"] = args.device or task_cfg.get("device", "cuda:0")
     logger_override = "wandb" if args.wandb else args.logger
     apply_logging_overrides(
         train_cfg,

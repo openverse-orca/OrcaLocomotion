@@ -13,11 +13,16 @@ Current targets:
 Install the runtime dependencies inside the OrcaLab environment:
 
 ```bash
-pip install -r requirements.txt
+pip install --extra-index-url https://py.mujoco.org -r requirements.txt
 ```
 
 When working from the original OrcaPlayground tree instead of the standalone `orca_rl` repository, use
-`pip install -r orca_rl/requirements.txt`.
+`pip install --extra-index-url https://py.mujoco.org -r orca_rl/requirements.txt`.
+
+`requirements.txt` now follows the MJWarp experiment line and installs MuJoCo 3.8, `warp-lang`, and
+`mujoco-warp`. `orca-gym 26.4.3` still declares `mujoco==3.5.0`, so pip may report a resolver warning. For current
+headless training this is acceptable because the G1 path uses local MuJoCo directly, and the tested CPU local path still
+runs under MuJoCo 3.8. Keep this in mind if you later rely on an OrcaGym release feature that assumes exactly 3.5.
 
 Before launching GO2, place exactly one GO2 actor in the OrcaLab scene. The scene binding requires the GO2 joints,
 actuators, contact sites, foot bodies, and touch sensors to match the asset suffixes used by
@@ -109,6 +114,23 @@ python -m orca_rl.run_train \
 Training is headless by default, so `--headless` / `--no-render` is mostly there to make the intent explicit in launch
 scripts. Use `--render` only for short training-debug runs where you want the viewer updated during learning.
 
+Experimental MJWarp stepping can be enabled for local headless training:
+
+```bash
+python -m orca_rl.run_train \
+  --config Unitree-G1-Flat \
+  --headless \
+  --num-envs 24 \
+  --sim-backend mjwarp
+```
+
+This keeps `OrcaGymLocalEnv` as the loader/metadata layer, but replaces the local `mujoco.mj_step(...)` call with
+`mujoco_warp.step(...)`. After each control step the GPU state is synchronized back to CPU `MjData` so the existing
+observation, reward, reset, and contact code remains compatible. The first launch compiles Warp kernels and can be slow;
+subsequent launches use the Warp cache. This is a compatibility bridge, not yet mjlab's full zero-copy `nworld`
+architecture, so it may be slower than CPU for small batches until observations/contact handling move fully onto GPU.
+The default backend remains `orca_cpu`.
+
 Visual playback/debugging stays in `run_play`:
 
 ```bash
@@ -164,8 +186,7 @@ height use the same seeded terrain runtime. Generated rough XML files include a 
 /tmp/orca_rl_mjcf/g1_29dof_old_batch_24_terrain_ed885449.xml
 ```
 
-This is still CPU MuJoCo physics. It removes rendering and scene-publish overhead, but it is not IsaacLab/MJX/mujoco_warp
-GPU physics.
+The default backend is still CPU MuJoCo physics. `--sim-backend mjwarp` is the experimental GPU stepping path.
 
 ## Current Task Status
 

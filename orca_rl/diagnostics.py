@@ -43,6 +43,7 @@ def print_runtime_summary(
     _print_kv("max_episode_length", getattr(env, "max_episode_length", "unknown"))
     _print_kv("control_dt", _control_dt(task_cfg))
     sim_cfg = task_cfg.get("sim", {})
+    _print_kv("sim_backend", sim_cfg.get("backend", "orca_cpu"))
     _print_kv("headless", sim_cfg.get("headless"))
     _print_kv("render_mode", sim_cfg.get("render_mode"))
     if iterations is not None:

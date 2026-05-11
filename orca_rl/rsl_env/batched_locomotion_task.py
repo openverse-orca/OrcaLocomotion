@@ -18,6 +18,7 @@ from .rendering import resolve_rendering
 from .reward_manager import FlatVelocityReward, RewardConfig
 from .terrain_runtime import TerrainRuntime
 from .termination_manager import TerminationConfig, TerminationManager
+from .mjwarp_runtime import MjWarpRuntime
 
 
 @dataclass
@@ -105,6 +106,8 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self._is_subenv = self._headless
         self._sync_render = bool(sim_cfg.get("sync_render", False))
         self.env_id = env_id
+        self._sim_backend = str(sim_cfg.get("backend", "orca_cpu")).strip().lower()
+        self._mjwarp_runtime: MjWarpRuntime | None = None
         self.decimation = int(sim_cfg.get("decimation", 4))
         self.control_dt = float(sim_cfg["time_step"]) * int(sim_cfg["frame_skip"]) * self.decimation
         self.max_episode_length = int(round(float(cfg["episode"]["length_s"]) / self.control_dt))
@@ -121,6 +124,21 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
 
         self.nu = self.model.nu
         self.ctrl = np.zeros(self.nu, dtype=np.float64)
+        if self._sim_backend == "mjwarp":
+            self._mjwarp_runtime = MjWarpRuntime(
+                model=self.gym._mjModel,
+                data=self.gym._mjData,
+                device=str(sim_cfg.get("mjwarp_device") or cfg.get("device", "cuda:0")),
+                nconmax=sim_cfg.get("mjwarp_nconmax"),
+                njmax=sim_cfg.get("mjwarp_njmax"),
+            )
+            info = self._mjwarp_runtime.info
+            print(
+                "[orca_rl.mjwarp] enabled "
+                f"device={info.device} nworld={info.nworld} qpos={info.qpos_shape} ctrl={info.ctrl_shape}"
+            )
+        elif self._sim_backend not in {"", "orca_cpu", "cpu", "mujoco"}:
+            raise ValueError(f"Unknown sim.backend: {self._sim_backend!r}")
         self._setup_global_randomization_targets()
         local_terrain_cfg = self.robot_config.get("local_terrain_cfg")
         self._shared_terrain_runtime = (
@@ -193,10 +211,17 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
 
         self.ctrl[:] = 0.0
         self.ctrl[self._flat_actuator_ids] = torque.reshape(-1)
-        for _ in range(self.decimation):
-            self.set_ctrl(self.ctrl)
-            self.mj_step(nstep=self.frame_skip)
-        self.update_data()
+        if self._mjwarp_runtime is not None:
+            for _ in range(self.decimation):
+                self._mjwarp_runtime.set_ctrl(self.ctrl)
+                self._mjwarp_runtime.step(nstep=self.frame_skip)
+            self._mjwarp_runtime.sync_to_cpu(self.gym._mjData, recompute_contacts=True)
+            self.update_data()
+        else:
+            for _ in range(self.decimation):
+                self.set_ctrl(self.ctrl)
+                self.mj_step(nstep=self.frame_skip)
+            self.update_data()
         if self._render_mode == "human":
             self.render()
 
@@ -296,9 +321,16 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self.set_joint_qvel(joint_qvel)
         self._apply_global_randomization(self.agents[int(indices[0])].randomization_state)
         self.ctrl[:] = 0.0
-        self.set_ctrl(self.ctrl)
-        self.mj_forward()
-        self.update_data()
+        if self._mjwarp_runtime is not None:
+            self.set_ctrl(self.ctrl)
+            self._mjwarp_runtime.sync_from_cpu(self.gym._mjData)
+            self._mjwarp_runtime.forward()
+            self._mjwarp_runtime.sync_to_cpu(self.gym._mjData, recompute_contacts=True)
+            self.update_data()
+        else:
+            self.set_ctrl(self.ctrl)
+            self.mj_forward()
+            self.update_data()
         if self._render_mode == "human":
             self.render()
 
@@ -860,8 +892,14 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
             data.qvel[agent.base_qvel_offset + 5] += agent.rng.uniform(yaw_low, yaw_high)
             any_push = True
         if any_push:
-            self.mj_forward()
-            self.update_data()
+            if self._mjwarp_runtime is not None:
+                self._mjwarp_runtime.sync_from_cpu(data)
+                self._mjwarp_runtime.forward()
+                self._mjwarp_runtime.sync_to_cpu(data, recompute_contacts=True)
+                self.update_data()
+            else:
+                self.mj_forward()
+                self.update_data()
 
     def _push_interval_steps(self) -> int:
         interval_s = float(self.cfg.get("randomization", {}).get("push_interval_s", 0.0))
