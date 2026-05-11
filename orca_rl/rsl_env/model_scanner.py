@@ -69,7 +69,9 @@ class SceneScanReport:
 class SceneProbeEnv(OrcaGymLocalEnv):
     """Minimal OrcaGym env used only for reading model dictionaries."""
 
-    pass
+    _headless = True
+    _render_mode = "none"
+    _is_subenv = True
 
 
 def scan_scene_for_template(
@@ -311,4 +313,3 @@ def _build_ui_hint_message(
 
 def _emit_terminal_hint(message: str) -> None:
     print(f"[orca_rl.scene hint] {message}")
-

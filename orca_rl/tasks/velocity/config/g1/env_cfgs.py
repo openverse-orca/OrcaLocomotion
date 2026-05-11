@@ -42,9 +42,12 @@ def _apply_g1_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> LocomotionE
         "resolver": "g1",
         "min_count": 1,
         "max_count": 1,
-        "spawn_if_missing": True,
+        "spawn_if_missing": False,
+        "max_auto_spawn_count": 1,
         "spawn_agent_name": "g1_000",
         "asset_path": "assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda",
+        "local_xml_path": "auto",
+        "local_clone_spacing": 2.0,
     }
     cfg.observation_scales["height_scale"] = 2.0
     cfg.reset.update({"xy_noise": 0.03, "yaw_noise": 0.15, "joint_noise": 0.02})

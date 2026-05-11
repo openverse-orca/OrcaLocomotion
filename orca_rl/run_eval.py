@@ -33,6 +33,8 @@ def main() -> None:
 
     task_cfg, train_cfg = load_task_and_train_cfg(args.config)
     apply_remote_override(task_cfg, args.remote)
+    task_cfg.setdefault("sim", {})["render_mode"] = "none"
+    task_cfg["sim"]["headless"] = True
     check_orcagym_addresses(task_cfg)
 
     try:
@@ -47,9 +49,8 @@ def main() -> None:
     checkpoint = args.ckpt or str(
         find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)
     )
-    task_cfg.setdefault("sim", {})["render_mode"] = "none"
     try:
-        env = make_locomotion_vec_env(task_cfg, device=device, render_mode="none")
+        env = make_locomotion_vec_env(task_cfg, device=device, render_mode="none", headless=True)
     except ImportError as exc:
         raise explain_missing_runtime_dependency(exc) from exc
     try:

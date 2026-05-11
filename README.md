@@ -43,18 +43,18 @@ from orca_rl.tasks.velocity.config import (
 ```
 
 The Orca runtime side is robot-neutral: `rsl_env/adapters/vecenv.py` creates the RSL-RL VecEnv, and
-`rsl_env/locomotion_task.py` runs one bound robot instance. Robot-specific asset discovery is selected through each
-config's `scene_binding.resolver` alias. Built-in aliases are `g1` and `go2`; custom import paths are still supported
-for new assets.
+`rsl_env/batched_locomotion_task.py` runs all robot agents inside one local MuJoCo runtime per simulator group.
+Robot-specific binding is selected through each config's `scene_binding.resolver` alias. Built-in aliases are `g1` and
+`go2`; custom import paths are still supported for new assets.
 
 When train/play/eval starts, Orca RL prints a terminal runtime summary with the selected device and GPU, observation
 dimensions, action dimensions, reward terms, termination terms, commands, domain randomization, terrain, sensors,
 curriculum, and scene binding.
 
-For G1, use `orca_rl/tasks/velocity/config/g1/env_cfgs.py`. It scans the existing G1 scene first; if no complete
-G1 is found, or fewer complete G1 instances are found than the requested training `num_envs`, it tries to publish
-`g1_000`, `g1_001`, ... from:
-`assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda`.
+For G1, use `orca_rl/tasks/velocity/config/g1/env_cfgs.py`. Headless training now uses a local MJCF clone-tiling path
+by default: one source G1 XML is cloned into `g1_000`, `g1_001`, ... inside a generated local MuJoCo XML under
+`/tmp/orca_rl_mjcf`. This path does not require an OrcaLab scene, does not require the `localhost:50051` gRPC service,
+and does not publish actors into the OrcaLab layout.
 
 RSL-RL parallelism is configured with the usual `num_envs` meaning. Use the config's `num_envs` field or override it
 from the CLI:
@@ -68,32 +68,56 @@ python -m orca_rl.run_train \
 The adapter resolves exactly that many complete scene robot bindings and exposes exactly that many environments to
 RSL-RL. There is no user-facing `subenv_num * agent_num` product in the Orca RL config.
 
+Orca RL batches all resolved agents into one local MuJoCo runtime per simulator group. For example, G1
+`--num-envs 4096` creates one RSL-RL VecEnv with 4096 logical environments but one simulator group, so stepping no
+longer creates or advances 4096 separate `OrcaGymLocalEnv` Python wrappers. Multiple comma-separated remote addresses
+still split non-local scene-backed runs across one simulator group per address.
+
+G1 auto-publish is disabled by default to avoid accidentally inserting thousands of actors into the OrcaLab scene. If
+you want to train against an OrcaLab-authored scene instead of the generated local MJCF, set
+`scene_binding.local_xml_path = None` and prepare the scene explicitly.
+
 Train GO2:
 
 ```bash
 python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py
+  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py \
+  --headless
 ```
 
 Train G1:
 
 ```bash
 python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py
+  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --headless
+```
+
+Training is headless by default, so `--headless` / `--no-render` is mostly there to make the intent explicit in launch
+scripts. Use `--render` only for short training-debug runs where you want the viewer updated during learning.
+
+Visual playback/debugging stays in `run_play`:
+
+```bash
+python -m orca_rl.run_play \
+  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --ckpt <path_to_checkpoint>
 ```
 
 Train GO2 rough terrain config:
 
 ```bash
 python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg
+  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
+  --headless
 ```
 
 Train G1 rough terrain config:
 
 ```bash
 python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg
+  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg \
+  --headless
 ```
 
 The `file.py:factory_name` form is the development-mode task selector until the later registry layer lands.
@@ -326,6 +350,7 @@ Train G1 with W&B logging:
 ```bash
 python -m orca_rl.run_train \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --headless \
   --logger wandb \
   --wandb-project orca_locomotion \
   --wandb-mode online
@@ -353,7 +378,8 @@ Short multi-env smoke test:
 python -m orca_rl.run_train \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
   --num-envs 2 \
-  --num-iterations 1
+  --num-iterations 1 \
+  --headless
 ```
 
 If OrcaGym is not listening on `localhost:50051`, override the address:
@@ -361,7 +387,8 @@ If OrcaGym is not listening on `localhost:50051`, override the address:
 ```bash
 python -m orca_rl.run_train \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
-  --remote 192.168.1.10:50051
+  --remote 192.168.1.10:50051 \
+  --headless
 ```
 
 Play a checkpoint:

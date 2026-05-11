@@ -38,9 +38,13 @@ def print_runtime_summary(
     _print_kv("device", device)
     _print_kv("gpu", _gpu_summary(torch, device))
     _print_kv("num_envs", getattr(env, "num_envs", "unknown"))
+    _print_kv("num_sim_groups", len(getattr(env, "tasks", ())))
     _print_kv("num_actions", getattr(env, "num_actions", "unknown"))
     _print_kv("max_episode_length", getattr(env, "max_episode_length", "unknown"))
     _print_kv("control_dt", _control_dt(task_cfg))
+    sim_cfg = task_cfg.get("sim", {})
+    _print_kv("headless", sim_cfg.get("headless"))
+    _print_kv("render_mode", sim_cfg.get("render_mode"))
     if iterations is not None:
         _print_kv("iterations", iterations)
     if log_dir is not None:
@@ -123,6 +127,8 @@ def print_runtime_summary(
     print("\n[Scene]")
     scene_binding = task_cfg.get("scene_binding", {})
     _print_kv("resolver", scene_binding.get("resolver"), indent=2)
+    _print_kv("source", _scene_source(env), indent=2)
+    _print_kv("model_xml_path", _scene_model_xml_path(env), indent=2)
     _print_kv("addresses", task_cfg.get("orcagym_addresses"), indent=2)
     _print_bar()
 
@@ -194,6 +200,20 @@ def _compact_params(params: Any) -> str:
     if not compact:
         return ""
     return f" params={compact}"
+
+
+def _scene_source(env: Any) -> str:
+    tasks = getattr(env, "tasks", ())
+    if not tasks:
+        return "unknown"
+    return "local_mjcf" if getattr(tasks[0], "model_xml_path", None) else "orcalab_scene"
+
+
+def _scene_model_xml_path(env: Any) -> str | None:
+    tasks = getattr(env, "tasks", ())
+    if not tasks:
+        return None
+    return getattr(tasks[0], "model_xml_path", None)
 
 
 def _print_kv(key: str, value: Any, indent: int = 0) -> None:

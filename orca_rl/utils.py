@@ -158,6 +158,9 @@ def check_wandb_dependency(train_cfg: dict[str, Any]) -> None:
 
 
 def check_orcagym_addresses(task_cfg: dict[str, Any], timeout_s: float = 2.0) -> None:
+    if _uses_headless_local_mjcf(task_cfg):
+        return
+
     addresses = task_cfg.get("orcagym_addresses") or []
     if not addresses:
         raise ValueError("task config must define at least one orcagym address.")
@@ -176,6 +179,15 @@ def check_orcagym_addresses(task_cfg: dict[str, Any], timeout_s: float = 2.0) ->
             "`--remote host:port` / update `orcagym_addresses` in the locomotion config. "
             f"Failed address(es): {', '.join(failures)}"
         )
+
+
+def _uses_headless_local_mjcf(task_cfg: dict[str, Any]) -> bool:
+    scene_cfg = task_cfg.get("scene_binding") or {}
+    sim_cfg = task_cfg.get("sim") or {}
+    local_xml_path = scene_cfg.get("local_xml_path")
+    render_mode = str(sim_cfg.get("render_mode", "none")).strip().lower()
+    headless = bool(sim_cfg.get("headless", render_mode in {"", "none", "headless", "no-render", "no_render"}))
+    return local_xml_path is not None and headless and render_mode != "human"
 
 
 def _split_host_port(address: str) -> tuple[str, int]:

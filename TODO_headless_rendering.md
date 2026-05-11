@@ -1,5 +1,7 @@
 # TODO: Add Headless / No-Rendering Training Mode
 
+Status: implemented.
+
 ## Background
 
 Current training launches the simulator with rendering enabled. This makes training much slower, especially when running many parallel environments.
@@ -14,19 +16,19 @@ Add a headless / no-rendering mode to the training pipeline so that simulation c
 
 ### 1. Add a command-line argument
 
-Add a training argument such as:
+Added training arguments:
 
 ```bash
 --headless
 ```
 
-or:
+Alias:
 
 ```bash
 --no-render
 ```
 
-Example target usage:
+Example usage:
 
 ```bash
 python -m orca_rl.run_train \
@@ -36,16 +38,16 @@ python -m orca_rl.run_train \
 
 ### 2. Pass the option into the simulator / environment
 
-Make sure the headless flag is forwarded from `run_train` to the environment creation code and then to the OrcaGym / OrcaLab simulator backend.
+Done. The headless flag is forwarded from `run_train` to the environment factory, VecEnv adapter, and task backend.
 
 Expected behavior:
 
-- `--headless` enabled: no viewer, no rendering, faster training.
-- `--headless` disabled: normal visual simulation for debugging.
+- `--headless` enabled: no viewer/render calls, faster training.
+- `--render` enabled: normal visual simulation for debugging.
 
 ### 3. Disable unnecessary rendering during training
 
-When running in headless mode, disable:
+Done. When running in headless mode, training disables:
 
 - Viewer window
 - Camera rendering
@@ -54,11 +56,11 @@ When running in headless mode, disable:
 
 ### 4. Keep rendering available for play / debugging
 
-`run_play` or debug mode should still support rendering so trained policies can be visually inspected.
+Done. `run_play` still uses human rendering so trained policies can be visually inspected.
 
 ### 5. Document usage in README
 
-Add examples to the README:
+Done. README examples now include:
 
 ```bash
 # Fast headless training
@@ -69,9 +71,11 @@ python -m orca_rl.run_train \
 # Visual debugging / playback
 python -m orca_rl.run_play \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
-  --checkpoint <path_to_checkpoint>
+  --ckpt <path_to_checkpoint>
 ```
 
 ## Notes
 
 This is important because training with the simulator window open is currently too slow. Headless mode should be the default choice for large-scale RL training.
+
+Follow-up completed: G1 headless training now uses a generated local MJCF batch by default, so it can run without OrcaLab viewport rendering, without a gRPC server, and without publishing actors into the interactive scene.

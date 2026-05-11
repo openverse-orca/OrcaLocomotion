@@ -9,7 +9,8 @@ from tensordict import TensorDict
 
 from rsl_rl.env import VecEnv
 
-from ..locomotion_task import OrcaLocomotionTask
+from ..batched_locomotion_task import BatchedOrcaLocomotionTask
+from ..rendering import resolve_rendering
 from ..scene_resolvers import resolve_scene_binding
 
 
@@ -22,11 +23,19 @@ class OrcaRslRlVecEnv(VecEnv):
         *,
         device: str = "cpu",
         render_mode: str | None = None,
+        headless: bool | None = None,
     ) -> None:
         self.cfg = task_cfg
         self.device = torch.device(device)
-        self.tasks: list[OrcaLocomotionTask] = []
+        self.tasks: list[BatchedOrcaLocomotionTask] = []
         self._last_logs: list[dict[str, float]] = []
+        self.headless, self.render_mode = resolve_rendering(
+            task_cfg,
+            render_mode=render_mode,
+            headless=headless,
+        )
+        self.cfg.setdefault("sim", {})["headless"] = self.headless
+        self.cfg["sim"]["render_mode"] = self.render_mode
 
         scene_cfg = dict(task_cfg.get("scene_binding", {}))
         resolver = _load_scene_binding_resolver(scene_cfg)
@@ -46,31 +55,32 @@ class OrcaRslRlVecEnv(VecEnv):
                 time_step=float(task_cfg["sim"]["time_step"]),
                 num_envs=env_count,
             )
-            for agent_name in binding.agent_names:
-                task = OrcaLocomotionTask(
-                    cfg=task_cfg,
-                    orcagym_addr=address,
-                    agent_name=agent_name,
-                    robot_config=binding.robot_config,
-                    render_mode=render_mode or task_cfg.get("sim", {}).get("render_mode", "none"),
-                    env_id=f"{task_cfg.get('name', 'locomotion')}-OrcaGym-{env_index:03d}",
-                )
-                self.tasks.append(task)
-                env_index += 1
+            task = BatchedOrcaLocomotionTask(
+                cfg=task_cfg,
+                orcagym_addr=address,
+                agent_names=binding.agent_names,
+                robot_config=binding.robot_config,
+                model_xml_path=getattr(binding, "model_xml_path", None),
+                render_mode=self.render_mode,
+                headless=self.headless,
+                env_id=f"{task_cfg.get('name', 'locomotion')}-OrcaGym-{env_index:03d}",
+            )
+            self.tasks.append(task)
+            env_index += task.num_envs
 
         if not self.tasks:
             raise ValueError("At least one OrcaGym address is required for RSL-RL training.")
-        if len(self.tasks) != desired_num_envs:
-            raise ValueError(f"Expected {desired_num_envs} envs, resolved {len(self.tasks)} envs from OrcaLab scene.")
+        if env_index != desired_num_envs:
+            raise ValueError(f"Expected {desired_num_envs} envs, resolved {env_index} envs from OrcaLab scene.")
 
-        self.num_envs = len(self.tasks)
+        self.num_envs = env_index
         self.num_actions = self.tasks[0].num_actions
         self.max_episode_length = self.tasks[0].max_episode_length
         self.episode_length_buf = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
 
     def get_observations(self) -> TensorDict:
         observations = [task.get_observations(noisy=True) for task in self.tasks]
-        return self._stack_observations(observations)
+        return self._concat_observations(observations)
 
     def step(self, actions: torch.Tensor) -> tuple[TensorDict, torch.Tensor, torch.Tensor, dict]:
         actions_np = actions.detach().to("cpu").numpy()
@@ -83,14 +93,21 @@ class OrcaRslRlVecEnv(VecEnv):
         time_outs = np.zeros(self.num_envs, dtype=bool)
         logs = []
 
-        for env_index, (task, action) in enumerate(zip(self.tasks, actions_np)):
-            result = task.step(action)
+        start = 0
+        for task in self.tasks:
+            stop = start + task.num_envs
+            result = task.step(actions_np[start:stop])
             observations.append(result.observations)
-            rewards[env_index] = result.reward
-            dones[env_index] = result.done
-            time_outs[env_index] = result.time_out
-            logs.append(result.log)
-            self.episode_length_buf[env_index] = task.episode_length
+            rewards[start:stop] = result.rewards
+            dones[start:stop] = result.dones
+            time_outs[start:stop] = result.time_outs
+            logs.extend(result.logs)
+            self.episode_length_buf[start:stop] = torch.as_tensor(
+                result.episode_lengths,
+                dtype=torch.long,
+                device=self.device,
+            )
+            start = stop
 
         self._last_logs = logs
         extras = {
@@ -98,7 +115,7 @@ class OrcaRslRlVecEnv(VecEnv):
             "log": self._aggregate_logs(logs),
         }
         return (
-            self._stack_observations(observations),
+            self._concat_observations(observations),
             torch.as_tensor(rewards, dtype=torch.float32, device=self.device),
             torch.as_tensor(dones, dtype=torch.bool, device=self.device),
             extras,
@@ -106,26 +123,33 @@ class OrcaRslRlVecEnv(VecEnv):
 
     def reset(self) -> TensorDict:
         observations = []
-        for env_index, task in enumerate(self.tasks):
+        start = 0
+        for task in self.tasks:
             obs, _ = task.reset_model()
             observations.append(obs)
-            self.episode_length_buf[env_index] = task.episode_length
-        return self._stack_observations(observations)
+            stop = start + task.num_envs
+            self.episode_length_buf[start:stop] = torch.as_tensor(
+                task.episode_lengths,
+                dtype=torch.long,
+                device=self.device,
+            )
+            start = stop
+        return self._concat_observations(observations)
 
     def close(self) -> None:
         for task in self.tasks:
             task.close()
 
-    def _stack_observations(self, observations: list[dict[str, np.ndarray]]) -> TensorDict:
-        stacked = {
+    def _concat_observations(self, observations: list[dict[str, np.ndarray]]) -> TensorDict:
+        concatenated = {
             key: torch.as_tensor(
-                np.stack([obs[key] for obs in observations], axis=0),
+                np.concatenate([obs[key] for obs in observations], axis=0),
                 dtype=torch.float32,
                 device=self.device,
             )
             for key in observations[0].keys()
         }
-        return TensorDict(stacked, batch_size=[self.num_envs], device=self.device)
+        return TensorDict(concatenated, batch_size=[self.num_envs], device=self.device)
 
     def _aggregate_logs(self, logs: list[dict[str, float]]) -> dict[str, torch.Tensor]:
         if not logs:

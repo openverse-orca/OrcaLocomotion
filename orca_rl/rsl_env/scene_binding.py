@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+import os
 import time
 
+from .local_mjcf import build_local_mjcf_batch, resolve_existing_xml_path
 from .model_scanner import (
     build_suffix_template,
     require_complete_matches,
@@ -16,6 +18,8 @@ from .robot_configs import GO2_CONFIG
 class SceneBinding:
     agent_names: list[str]
     robot_config: dict
+    model_xml_path: str | None = None
+    source: str = "orcalab_scene"
 
     @property
     def agent_name(self) -> str:
@@ -23,6 +27,11 @@ class SceneBinding:
 
 
 G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda"
+G1_LOCAL_XML_CANDIDATES = [
+    os.environ.get("ORCA_RL_G1_XML", ""),
+    "/home/huan-hu/OrcaPlayground/examples/g1/g1_29dof_old.xml",
+    "/home/huan-hu/下载/unitree_rl_mjlab/src/assets/robots/unitree_g1/xmls/scene_g1.xml",
+]
 
 G1_JOINT_SUFFIXES = [
     "left_hip_pitch_joint",
@@ -298,14 +307,39 @@ def resolve_g1_scene_binding(
     num_envs: int | None = None,
     *,
     spawn_if_missing: bool = False,
+    max_auto_spawn_count: int = 1,
     spawn_agent_name: str = "g1_000",
     asset_path: str = G1_AGENT_ASSET_PATH,
+    local_xml_path: str | None = None,
+    local_clone_spacing: float = 2.0,
+    local_xml_output_dir: str | None = None,
 ) -> SceneBinding:
     desired_count = int(num_envs or min_count)
     if num_envs is not None:
         min_count = desired_count
         max_count = desired_count
     robot_config = _build_g1_robot_config()
+    if local_xml_path is not None:
+        source_xml_path = resolve_existing_xml_path(local_xml_path, G1_LOCAL_XML_CANDIDATES)
+        agent_names = [f"{spawn_agent_name.rsplit('_', 1)[0]}_{index:03d}" for index in range(desired_count)]
+        model_xml_path = build_local_mjcf_batch(
+            source_xml_path=source_xml_path,
+            agent_names=agent_names,
+            spacing=float(local_clone_spacing),
+            output_dir=local_xml_output_dir,
+        )
+        robot_config["model_name"] = "G1"
+        robot_config["log_agent_names"] = agent_names
+        robot_config["visualize_command_agent_names"] = agent_names
+        robot_config["playable_agent_name"] = agent_names[0]
+        robot_config["local_source_xml_path"] = source_xml_path
+        return SceneBinding(
+            agent_names=agent_names,
+            robot_config=robot_config,
+            model_xml_path=model_xml_path,
+            source="local_mjcf",
+        )
+
     template = build_suffix_template(
         model_name="G1",
         joints=["floating_base_joint", *G1_JOINT_SUFFIXES],
@@ -318,6 +352,15 @@ def resolve_g1_scene_binding(
         template=template,
     )
     if spawn_if_missing and len(report.complete_matches) < desired_count:
+        max_auto_spawn_count = max(0, int(max_auto_spawn_count))
+        missing_count = desired_count - len(report.complete_matches)
+        if missing_count > max_auto_spawn_count:
+            raise RuntimeError(
+                "Refusing to auto-publish a large G1 batch into the OrcaLab scene. "
+                f"requested={desired_count}, existing={len(report.complete_matches)}, missing={missing_count}, "
+                f"max_auto_spawn_count={max_auto_spawn_count}. Prepare a batched scene explicitly or raise "
+                "`scene_binding.max_auto_spawn_count` after accepting the scene compile/render cost."
+            )
         try:
             publish_g1_scene(
                 orcagym_addr=orcagym_addr,

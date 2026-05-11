@@ -1,21 +1,34 @@
-# RSL-RL Locomotion Restructure Report
+# RSL-RL OrcaLab Integration Report
 
-## Goal
+## Summary
 
-After the G1 feasibility test passed, the locomotion RSL-RL integration was promoted out of `examples/` into the
-top-level `orca_rl` package. The package now follows an mjlab/IsaacLab-style layout: task configs live with the task
-family, while the low-level OrcaGym-to-RSL-RL conversion is isolated under an adapter package.
+This package wires RSL-RL locomotion training into OrcaLab / OrcaGym through a robot-neutral Python package named
+`orca_rl`. The current runtime is now centered on a batched local MuJoCo bridge: one simulator group creates one
+`OrcaGymLocalEnv`, and all robot agents inside that local MuJoCo model are exposed to RSL-RL as logical vector
+environments.
 
-References used for the target shape:
+The most important recent change is the removal of the old per-environment runtime. Earlier, `num_envs=4096` meant
+4096 Python task wrappers, 4096 local-env initializations, and 4096 serial step calls. The new path uses
+`BatchedOrcaLocomotionTask`, so G1 `num_envs=4096` means one simulator group with 4096 logical RSL-RL environments.
 
-- https://github.com/mujocolab/mjlab/tree/main/src/mjlab
-- https://github.com/mujocolab/mjlab/tree/main/src/mjlab/tasks/velocity/config
-- https://github.com/mujocolab/mjlab/tree/main/src/mjlab/tasks/velocity/config/go1
-- https://github.com/mujocolab/mjlab/tree/main/src/mjlab/tasks/velocity/mdp
+The G1 training path now also has a local MJCF clone-tiling mode. In headless training it can generate a batched MuJoCo
+XML directly from a local source XML, so it no longer needs an OrcaLab scene, does not require the `localhost:50051`
+gRPC service, and does not publish actors into the interactive layout.
 
-## New Layout
+## Goals
 
-Task configs now live here:
+- Use RSL-RL's standard `VecEnv` interface for locomotion training.
+- Keep task configuration close to mjlab / IsaacLab: Python config factories, robot-specific config packages, and
+  MDP-style declarations for rewards, observations, commands, terminations, and events.
+- Run with visual rendering disabled during training.
+- Keep `run_play` visual for policy inspection.
+- Avoid one Python simulator wrapper per logical environment.
+- Avoid surprise large-scale OrcaLab scene publishing when a large `--num-envs` value is used.
+- Provide a local MJCF path for G1 so headless training can start without OrcaStudio scene setup.
+
+## Current Layout
+
+Task and runner configs:
 
 ```text
 orca_rl/tasks/velocity/config/g1/env_cfgs.py
@@ -24,23 +37,37 @@ orca_rl/tasks/velocity/config/go2/env_cfgs.py
 orca_rl/tasks/velocity/config/go2/rl_cfg.py
 ```
 
-Adapter code now lives here:
+RSL-RL adapter and batched runtime:
 
 ```text
 orca_rl/rsl_env/adapters/factory.py
 orca_rl/rsl_env/adapters/vecenv.py
-orca_rl/rsl_env/locomotion_task.py
+orca_rl/rsl_env/batched_locomotion_task.py
+orca_rl/rsl_env/local_mjcf.py
+orca_rl/rsl_env/rendering.py
 ```
 
-The shared MDP-style config scaffolding now lives here:
+Shared runtime managers:
 
 ```text
-orca_rl/tasks/velocity/config_types.py
-orca_rl/tasks/velocity/velocity_env_cfg.py
-orca_rl/tasks/velocity/mdp/
+orca_rl/rsl_env/action_mapper.py
+orca_rl/rsl_env/obs_builder.py
+orca_rl/rsl_env/reward_manager.py
+orca_rl/rsl_env/termination_manager.py
+orca_rl/rsl_env/randomization.py
+orca_rl/rsl_env/terrain_runtime.py
 ```
 
-Mjlab-inspired support packages now live here:
+Scene binding and asset discovery:
+
+```text
+orca_rl/rsl_env/scene_binding.py
+orca_rl/rsl_env/model_scanner.py
+orca_rl/rsl_env/scene_resolvers.py
+orca_rl/rsl_env/robot_configs.py
+```
+
+Support packages:
 
 ```text
 orca_rl/sensor/
@@ -48,267 +75,495 @@ orca_rl/terrains/
 orca_rl/managers/
 ```
 
-Old YAML config shims, robot-named VecEnv adapters, and robot-named task wrappers were removed.
+The old single-agent runtime file `orca_rl/rsl_env/locomotion_task.py` has been removed from the active tree. The active
+runtime path is batched-only.
 
-## Behavior
+## Launch Flow
 
-- `run_train`, `run_play`, and `run_eval` keep using the same loader path.
-- Adapter package exports are lazy, so importing the factory does not load `rsl_rl` until an env is actually created.
-- User-facing imports are now available from `orca_rl`, for example
-  `from orca_rl import load_task_and_train_cfg, make_locomotion_vec_env`.
-- Built-in velocity config factories can be imported from `orca_rl.tasks.velocity.config`.
-- G1 and GO2 now share one config-driven `OrcaRslRlVecEnv` and one `OrcaLocomotionTask` runtime.
-- Robot-specific scene binding is selected by `scene_binding.resolver` in each task config. Built-ins use short aliases:
-  `g1` and `go2`. Dotted import paths are still supported for custom robots.
-- Python config loading now supports `TASK_CONFIG_FACTORY` and `RL_CONFIG_FACTORY`.
-- Python config loading now supports `file.py:factory_name`, which lets rough configs live beside flat configs before
-  the later task registry is introduced.
-- YAML locomotion config loading was removed from the active path; canonical configs are Python cfg files only.
-- G1 still uses the discovered asset path:
-  `assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda`.
-- G1 still maps 29 actions; GO2 still maps 12 actions.
-- Actor/critic observation grouping remains in each robot's `rl_cfg.py`.
-- Rewards, observations, commands, events, and terminations are declared as MDP-style terms in Python cfg objects, then
-  converted to the legacy dict shape consumed by the current Orca RSL-RL runtime.
-- MDP declarations now include the rough-terrain terms used by mjlab-style velocity tasks: terrain curriculum,
-  terrain randomization, height scan observation, foot height observation, foot air time, foot clearance, stand-still,
-  body angular velocity, joint deviation, illegal contact, and mean action acceleration metric.
-- Terrain and sensor config metadata now has first-class package homes. `orca_rl.terrains` describes plane/generator
-  terrain metadata; `orca_rl.sensor` describes contact sensors and ray-cast terrain scans.
-- `orca_rl.terrains.generator` now generates procedural heightfields for random-uniform, pyramid-stairs,
-  discrete-obstacle, and wave terrain. It can sample heights for policy height scans and convert the heightfield to an
-  OBJ mesh.
-- `orca_rl.rsl_env.terrain_runtime` now creates the procedural terrain at env setup and feeds height scan observations
-  from the generated heightfield. Physics collision is gated by `terrain.physics_enabled` and defaults to false because
-  OrcaLab currently blocks local mesh/asset import in this environment.
-- G1 and GO2 both provide flat and rough velocity config factories:
-  `unitree_g1_flat_env_cfg`, `unitree_g1_rough_env_cfg`, `unitree_go2_flat_env_cfg`, and
-  `unitree_go2_rough_env_cfg`.
-- Rough configs add a 187-ray height scan to policy and privileged observations. The scan now comes from the generated
-  heightfield. Once OrcaLab mesh import/publish is enabled, the same generated mesh should be inserted into the scene so
-  observations and collisions share the same terrain.
-- RSL-RL checkpoint alias saving and W&B CLI flags are unchanged.
-- Train/play/eval now print an IsaacLab/MJLab-style terminal runtime summary before policy construction or inference:
-  device/GPU, action and observation dimensions, rewards, terminations, commands, domain randomization, terrain, sensors,
-  curriculum, and scene binding.
-- `run_train`, `run_play`, and `run_eval` default `--config` values now point at the canonical GO2 config path.
-- `.orcalab/config.toml` now points the menu entries at the canonical task config paths.
+Training starts in `orca_rl.run_train`:
+
+1. Load the task config with `load_task_and_train_cfg`.
+2. Apply CLI overrides such as `--num-envs`, `--remote`, logging, device, and rendering mode.
+3. Force training to headless by default:
+   - `headless=True`
+   - `render_mode="none"`
+4. Create an RSL-RL environment through `make_locomotion_vec_env`.
+5. Print runtime diagnostics.
+6. Construct `rsl_rl.runners.OnPolicyRunner`.
+7. Call `runner.learn(...)`.
+
+Playback starts in `orca_rl.run_play` and deliberately uses:
+
+```text
+headless=False
+render_mode="human"
+```
+
+Evaluation starts in `orca_rl.run_eval` and uses:
+
+```text
+headless=True
+render_mode="none"
+```
+
+## Scene Binding And Local MJCF
+
+The adapter does not hard-code G1 or GO2 names. Each config sets:
+
+```python
+scene_binding = {
+    "resolver": "g1",  # or "go2"
+    ...
+}
+```
+
+There are now two binding sources.
+
+For G1 headless training, the default config sets:
+
+```python
+"local_xml_path": "auto"
+```
+
+That selects the local MJCF path:
+
+1. Locate a source G1 XML. The default candidates include `/home/huan-hu/OrcaPlayground/examples/g1/g1_29dof_old.xml`,
+   and `ORCA_RL_G1_XML` can override this.
+2. Clone the robot body, actuators, sensors, contact exclusions, and references into `g1_000`, `g1_001`, ...
+3. Offset each cloned root body on a grid.
+4. Write the generated batch XML to `/tmp/orca_rl_mjcf`.
+5. Return those generated `agent_names` plus the generated `model_xml_path`.
+
+For scene-backed GO2 or explicit OrcaLab workflows, the resolver scans the compiled OrcaLab / OrcaGym model for complete
+robot instances. A complete instance must provide the expected joints, actuators, sites, bodies, and sensors. The
+resolver returns:
+
+- `agent_names`
+- `robot_config`
+- optional `model_xml_path`
+
+The batched runtime then passes all `agent_names` into a single `OrcaGymLocalEnv`. If `model_xml_path` is present, it
+loads that local XML directly and bypasses OrcaLab scene loading.
+
+## Why 4096 Used To Stall
+
+The old implementation treated each logical RSL-RL environment as its own `OrcaLocomotionTask`. That meant:
+
+- one `OrcaGymLocalEnv` object per logical env;
+- one gRPC/local model initialization per logical env;
+- one reset path per logical env;
+- one `task.step(action)` Python call per logical env;
+- one `do_simulation` / `update_data` path per logical env;
+- repeated contact, site, and sensor queries per logical env.
+
+For `--num-envs 4096`, this was effectively 4096 separate Python simulator wrappers. Headless mode helped by skipping
+render calls, but it did not change this per-env simulator architecture.
+
+## Batched Runtime Improvement
+
+The new runtime is `BatchedOrcaLocomotionTask`.
+
+For each simulator group:
+
+1. Resolve or generate the requested robot agents.
+2. Create one `OrcaGymLocalEnv` with all those `agent_names`.
+3. If a generated local MJCF path is provided, initialize `OrcaGymLocal(None)` and skip gRPC-only setup.
+4. Build per-agent metadata once:
+   - qpos/qvel offsets;
+   - actuator ids;
+   - joint limits;
+   - torque limits;
+   - foot contact bodies/sites/sensors;
+   - base contact bodies;
+   - observation/reward/termination managers.
+5. Stack the key indices into NumPy arrays.
+6. During step:
+   - receive an action matrix shaped `(num_envs_on_address, num_actions)`;
+   - compute all residual joint targets and PD torques in a batched NumPy operation;
+   - write all actuator commands into one full MuJoCo control vector;
+   - call `mj_step` once per decimation loop for the whole scene;
+   - call `update_data` once;
+   - query contacts and foot positions in grouped queries;
+   - compute per-agent observations, rewards, terminations, and logs.
+
+The RSL-RL adapter still exposes a standard VecEnv:
+
+```text
+obs, rewards, dones, extras = env.step(actions)
+```
+
+The difference is that internally it now loops over simulator groups, not over every logical environment.
+
+## Simulator Groups
+
+`OrcaRslRlVecEnv` now creates one batched simulator group per local MJCF batch or per OrcaGym address.
+
+Examples:
+
+```text
+--num-envs 4096
+```
+
+Result:
+
+```text
+num_envs: 4096
+num_sim_groups: 1
+```
+
+```text
+--num-envs 4096 --remote host0:50051,host1:50051,host2:50051,host3:50051
+```
+
+Result:
+
+```text
+num_envs: 4096
+num_sim_groups: 4
+```
+
+Each simulator group owns one local MuJoCo runtime. The runtime summary prints `num_sim_groups`, `source`, and
+`model_xml_path` so accidental regression back to per-env wrapping or scene-backed loading is visible immediately.
+
+## Rendering / Headless Changes
+
+Training now defaults to no rendering:
+
+```bash
+python -m orca_rl.run_train \
+  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --headless
+```
+
+`--headless` and `--no-render` are aliases. `--render` exists only for short debugging runs.
+
+The rendering resolver normalizes:
+
+- `headless=True` -> `render_mode="none"`
+- `headless=False` with no explicit mode -> `render_mode="human"`
+
+`run_play` keeps rendering enabled so a trained policy can be inspected visually.
+
+For G1 local MJCF headless training there is no OrcaStudio render loop involved at all. For scene-backed visual or
+debug runs, this still only disables render calls from `orca_rl`; an already-running OrcaStudio viewport can still
+consume GPU resources.
+
+## Scene Auto-Publish Change
+
+G1 previously had:
+
+```python
+"spawn_if_missing": True
+```
+
+That was convenient for small smoke tests, but dangerous for large training. If `--num-envs 4096` was requested and the
+scene had fewer complete G1 actors, the resolver could attempt to publish thousands of G1 actors into OrcaLab. This is
+the likely source of "strange things being added to the scene" and large render/compile overhead.
+
+G1 now defaults to:
+
+```python
+"spawn_if_missing": False
+"max_auto_spawn_count": 1
+"local_xml_path": "auto"
+```
+
+The local XML setting means normal headless G1 training no longer scans or publishes the OrcaLab scene. If
+`local_xml_path` is set to `None` and `spawn_if_missing` is explicitly enabled, the resolver still refuses large
+auto-publish requests. If missing actors exceed `max_auto_spawn_count`, it raises a clear error instead of filling the
+scene.
+
+For large G1 training, the expected workflow is now:
+
+1. Keep `scene_binding.local_xml_path = "auto"`.
+2. Start training with `--headless`.
+3. Verify the runtime summary:
+
+```text
+num_envs: <requested count>
+num_sim_groups: 1
+headless: True
+render_mode: none
+source: local_mjcf
+```
+
+## RSL-RL Interface
+
+The adapter implements the fields RSL-RL expects:
+
+- `num_envs`
+- `num_actions`
+- `max_episode_length`
+- `episode_length_buf`
+- `get_observations()`
+- `step(actions)`
+- `reset()`
+- `close()`
+
+Observations are returned as a `TensorDict` with:
+
+- `policy`
+- `privileged`
+
+The runner config maps RSL-RL actor/critic groups to these observation names:
+
+```python
+obs_groups = {
+    "actor": ["policy"],
+    "critic": ["policy", "privileged"],
+}
+```
+
+The policy receives the actor group, while the critic can receive privileged terms.
+
+## Action Pipeline
+
+The policy outputs normalized residual joint-position actions.
+
+Runtime flow:
+
+1. Clip policy actions.
+2. Convert actions to target joint positions around nominal qpos.
+3. Clamp targets to safety-scaled joint limits.
+4. Compute PD torque:
+
+```text
+torque = kp * (target_qpos - qpos) - kd * qvel
+```
+
+5. Clamp torque to effort limits.
+6. Write all agent torques into one full MuJoCo `ctrl` vector.
+7. Step the whole MuJoCo scene.
+
+The batched runtime vectorizes target and torque computation across agents on the same OrcaGym address.
+
+## Observation Pipeline
+
+For each agent, the runtime reads:
+
+- base position and orientation;
+- base linear/angular velocity;
+- joint position and velocity;
+- command;
+- last action;
+- last torque;
+- foot position/velocity/contact;
+- domain randomization state;
+- optional height scan samples.
+
+The actor observation includes:
+
+- base angular velocity;
+- projected gravity;
+- command;
+- joint position relative to nominal pose;
+- joint velocity;
+- last action;
+- optional height scan.
+
+The privileged observation includes:
+
+- base linear velocity;
+- base angular velocity;
+- projected gravity;
+- base height;
+- foot contacts;
+- foot heights;
+- foot velocities;
+- last torque;
+- domain randomization values;
+- optional height scan.
+
+## Reward / Termination Pipeline
+
+The flat task computes:
+
+- linear velocity tracking;
+- yaw velocity tracking;
+- vertical velocity penalty;
+- orientation penalty;
+- base height penalty;
+- torque penalty;
+- action-rate penalty;
+- joint-limit penalty;
+- foot-slip penalty;
+- termination penalty.
+
+The rough task additionally wires:
+
+- feet air time;
+- foot clearance;
+- body angular velocity;
+- stand-still regularization;
+- joint deviation;
+- illegal contact.
+
+Terminations include:
+
+- too low;
+- too high;
+- too tilted;
+- base contact;
+- illegal contact when configured;
+- invalid numerical state;
+- timeout.
+
+## Domain Randomization
+
+The local MuJoCo path supports:
+
+- friction scaling for matched ground/terrain geoms;
+- base mass delta;
+- base inertia scale;
+- base COM offset;
+- actuator kp/kd scaling;
+- torque strength scaling;
+- integer action latency;
+- push disturbance;
+- solver iteration/tolerance randomization;
+- contact solref/solimp/margin randomization.
+
+Some randomization values are global to the shared MuJoCo model, while others are per-agent. In a batched scene, global
+model fields cannot be independently different for every actor at the exact same time without deeper model duplication
+or per-geom/per-body field mapping for every replicated actor. The current implementation keeps the per-agent state for
+observations and per-agent actuator scaling, while global model parameters are applied at reset using a representative
+sample for the shared model.
+
+## Rough Terrain Status
+
+Rough terrain support is active as an observation/config scaffold:
+
+- procedural heightfield generation;
+- height scan observations;
+- OBJ export;
+- rough reward terms;
+- illegal contact termination.
+
+Physical rough-terrain collision is still gated because the generated terrain is not inserted into the compiled OrcaLab
+MuJoCo model by this package. Until OrcaLab exposes a reliable runtime terrain upload/import/reload path, robot feet
+still collide with the scene's existing terrain while height scans come from the Python heightfield.
+
+## Why Startup May Still Be Slow
+
+The batched runtime removes per-env Python simulator wrappers and per-env step calls. The local G1 MJCF path also removes
+OrcaStudio scene publishing from the headless training hot path.
+
+Startup can still be slow if:
+
+- the generated batch XML is very large;
+- MuJoCo compiles thousands of cloned articulated bodies;
+- contact/site/sensor dictionaries for thousands of actors are expensive to build;
+- a scene-backed workflow is used and OrcaStudio is rendering or compiling the stage.
+
+This is why G1 auto-publish is disabled by default, local MJCF is the default for G1 headless training, and the runtime
+summary prints the active source.
+
+## Remaining Gap Versus mjlab / IsaacLab
+
+mjlab and IsaacLab can launch very large batches quickly because they usually avoid interactive scene publishing in the
+hot path. They either build a local batched model directly, use a tensorized simulator, or clone environments inside an
+already optimized simulator scene.
+
+The remaining high-impact work for Orca RL is:
+
+1. Extend the local MJCF clone-tiling path to GO2 and rough-terrain collision assets.
+2. Cache or reuse generated and compiled batched scenes where MuJoCo allows it.
+3. Move observation/reward/termination calculation further from per-agent Python loops to vectorized NumPy/Torch.
+4. Add an OrcaLab true server-headless launch path for scene-backed visual/debug workflows.
+5. Add performance diagnostics that separately time XML generation, MuJoCo compile, env creation, physics step, data sync,
+   contact query, observation build, reward build, and RSL-RL update.
+
+## Recommended Large-Batch Workflow
+
+For G1 headless training, use the local MJCF path.
+
+```bash
+python -m orca_rl.run_train \
+  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
+  --num-envs 4096 \
+  --headless
+```
+
+Check the runtime summary before letting the run continue:
+
+```text
+num_envs: 4096
+num_sim_groups: 1
+headless: True
+render_mode: none
+source: local_mjcf
+model_xml_path: /tmp/orca_rl_mjcf/...
+```
+
+If `source` is `orcalab_scene`, the run is using a scene-backed workflow. That can be useful for visual debugging or
+GO2, but it is not the intended fast G1 headless path.
 
 ## Validation
 
-Ran these checks:
+Static checks performed:
 
 ```bash
-python - <<'PY'
-from pathlib import Path
-import ast
-for path in Path('orca_rl').rglob('*.py'):
-    ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
-print('ast ok')
-PY
+python -m compileall orca_rl
+python -m orca_rl.run_train --help
+python -m orca_rl.run_play --help
+python -m orca_rl.run_eval --help
+git diff --check
 ```
+
+Import checks in the OrcaLab conda environment:
 
 ```bash
 /home/huan-hu/miniconda3/envs/orcalab/bin/python - <<'PY'
-from orca_rl.utils import load_task_and_train_cfg
-configs = [
-    'orca_rl/tasks/velocity/config/g1/env_cfgs.py',
-    'orca_rl/tasks/velocity/config/go2/env_cfgs.py',
-    'orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg',
-    'orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg',
-]
-for cfg in configs:
-    task, train = load_task_and_train_cfg(cfg)
-    print(
-        cfg,
-        task['robot'],
-        task['name'],
-        task['terrain']['terrain_type'],
-        task['observations'].get('height_scan_dim', 0),
-        train['run_name'],
-        len(task['control']['max_delta']),
-    )
+from orca_rl.rsl_env.batched_locomotion_task import BatchedOrcaLocomotionTask
+from orca_rl.rsl_env.adapters.vecenv import OrcaRslRlVecEnv, _split_num_envs
+print(BatchedOrcaLocomotionTask.__name__, OrcaRslRlVecEnv.__name__)
+print(_split_num_envs(4096, 1), _split_num_envs(4096, 4))
 PY
 ```
 
 Observed:
 
 ```text
-orca_rl/tasks/velocity/config/g1/env_cfgs.py g1 g1_flat_velocity plane 0 flat 29
-orca_rl/tasks/velocity/config/go2/env_cfgs.py go2 go2_flat_velocity plane 0 flat 12
-orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg g1 g1_rough_velocity generator 187 rough 29
-orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg go2 go2_rough_velocity generator 187 rough 12
+BatchedOrcaLocomotionTask OrcaRslRlVecEnv
+[4096] [1024, 1024, 1024, 1024]
 ```
 
-Also checked:
-
-- `python -m orca_rl.run_train --help` in the OrcaLab conda env.
-- `python -m orca_rl.run_play --help` in the OrcaLab conda env.
-- `python -m orca_rl.run_eval --help` in the OrcaLab conda env.
-- Procedural terrain generation with a small test config, including height sampling and OBJ export.
-- Rough observation dimensions with generated height scan: flat GO2 policy obs is 45; rough GO2 policy obs is 232.
-- Importing `make_locomotion_vec_env` with the system Python does not eagerly require the RSL-RL runtime.
-- `.orcalab/config.toml` parses and points RSL-RL menu entries at `orca_rl/tasks/velocity/config/{g1,go2}/env_cfgs.py`.
-- `orca_rl.diagnostics.print_runtime_summary` was exercised with a fake env to verify terminal formatting without
-  requiring a live OrcaLab server.
-- Removed the obsolete `orca_rl/configs/` compatibility directory and old VecEnv import shims.
-- Removed robot-named task wrappers. Adding another flat-velocity robot should be config-package work: define
-  `env_cfgs.py`, `rl_cfg.py`, and either reuse a resolver alias or add a custom dotted resolver path when the asset
-  naming differs.
-- Removed the former examples-scoped package path. Runtime entrypoints are now `orca_rl.run_train`, `orca_rl.run_play`,
-  and `orca_rl.run_eval`.
-- Added RSL-RL-style `num_envs` as the public parallelism field. `python -m orca_rl.run_train --num-envs N` overrides
-  the config value, and the VecEnv now resolves exactly N scene robot bindings before creating the RSL-RL environment.
-- Updated G1 scene binding so `spawn_if_missing=True` publishes `g1_000`, `g1_001`, ... when the scene has fewer complete
-  G1 instances than requested by `num_envs`.
-- Verified live G1 smoke test in the OrcaLab conda env:
-  `python -m orca_rl.run_train --config orca_rl/tasks/velocity/config/g1/env_cfgs.py --num-envs 2 --num-iterations 1`.
-  The run resolved `['g1_000', 'g1_001']`, printed `num_envs: 2`, collected 48 rollout steps, completed one RSL-RL PPO
-  iteration on `cuda:0`, and saved `model_last.pt` / `model_final.pt`.
-
-## Recommended Commands
-
-G1 visual training smoke:
+Local MJCF validation in the OrcaLab conda environment:
 
 ```bash
-python -m orca_rl.run_train \
+/home/huan-hu/miniconda3/envs/orcalab/bin/python - <<'PY'
+from orca_rl.rsl_env.local_mjcf import build_local_mjcf_batch, resolve_existing_xml_path
+from orca_rl.rsl_env.scene_binding import G1_LOCAL_XML_CANDIDATES
+import mujoco
+source = resolve_existing_xml_path("auto", G1_LOCAL_XML_CANDIDATES)
+path = build_local_mjcf_batch(source_xml_path=source, agent_names=[f"g1_{i:03d}" for i in range(24)])
+model = mujoco.MjModel.from_xml_path(path)
+print(source, path, model.nq, model.nv, model.nu)
+PY
+```
+
+Observed:
+
+```text
+/home/huan-hu/OrcaPlayground/examples/g1/g1_29dof_old.xml /tmp/orca_rl_mjcf/g1_29dof_old_batch_24.xml 864 840 696
+```
+
+Live smoke test without an OrcaLab gRPC server:
+
+```bash
+/home/huan-hu/miniconda3/envs/orcalab/bin/python -m orca_rl.run_train \
   --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
-  --remote localhost:50051 \
-  --num-envs 2 \
+  --headless \
+  --num-envs 24 \
   --num-iterations 1
 ```
 
-G1 W&B training:
+Observed:
 
-```bash
-python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
-  --remote localhost:50051 \
-  --logger wandb \
-  --wandb-project orca_locomotion \
-  --wandb-mode online
+```text
+num_envs: 24
+num_sim_groups: 1
+source: local_mjcf
+model_xml_path: /tmp/orca_rl_mjcf/g1_29dof_old_batch_24.xml
+Steps per second: 520
 ```
-
-GO2 rough training:
-
-```bash
-python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
-  --remote localhost:50051
-```
-
-G1 rough training:
-
-```bash
-python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py:unitree_g1_rough_env_cfg \
-  --remote localhost:50051
-```
-
-Export a generated rough terrain mesh:
-
-```bash
-python -m orca_rl.terrains.export \
-  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
-  --out generated_terrains/go2_rough.obj
-```
-
-## Rough Environment Audit
-
-Current rough velocity configs are usable as a config/runtime scaffold, but not yet as a physically correct rough
-terrain training environment inside OrcaLab. The important distinction is:
-
-- Observation terrain is active.
-- Physics terrain is not active until OrcaLab allows local mesh/asset import or exposes a runtime terrain publish API.
-
-Working now:
-
-- `unitree_g1_rough_env_cfg` and `unitree_go2_rough_env_cfg` load through the `file.py:factory_name` selector.
-- RSL-RL runner configs use mjlab-style `logs/rsl_rl/<experiment_name>/<date_time>_<run_name>` output directories.
-- Runner configs use Gaussian policy distributions and full PPO parameters with 30000 default iterations.
-- `orca_rl.terrains.generator` creates procedural heightfields for:
-  - `random_uniform`
-  - `pyramid_stairs`
-  - `discrete_obstacles`
-  - `wave`
-- Generated heightfields support:
-  - bilinear `height_at(x, y)` sampling
-  - yaw-aware local height scans around the base
-  - mesh conversion
-  - OBJ export through `python -m orca_rl.terrains.export`
-- `orca_rl.rsl_env.terrain_runtime` is created during env setup and feeds rough height scan observations from the
-  generated heightfield.
-- Rough policy and privileged observations include the 187-dimensional height scan. This is no longer zero-filled when
-  terrain scan is configured.
-- Flat locomotion runtime remains usable:
-  - residual joint-position action mapping
-  - bounded action clipping
-  - PD torque computation
-  - command sampling
-  - base angular velocity / gravity / command / joint state / last action observations
-  - privileged base linear velocity, foot state, torque, and randomization observations
-  - flat velocity tracking reward terms
-  - base height / tilt / base-contact terminations
-- `terrain.physics_enabled` and `terrain.export_path` are present as future integration hooks.
-
-Implemented after the rough/flat follow-up audit:
-
-- `randomize_friction` now applies the sampled scale to matched local MuJoCo ground/terrain geoms in the
-  `OrcaGymLocalEnv` training path.
-- `randomize_body_mass` now applies a reset-safe sampled base-mass delta to the configured base body. The implementation
-  stores the original mass and writes the exact randomized mass each reset, so it does not accumulate deltas.
-- Base inertia scaling and base COM-offset randomization are active and use the same reset-safe baseline restore pattern.
-- Actuator randomization is active through sampled PD gain scales and torque-limit/strength scales.
-- Integer action latency is active through a per-environment action delay buffer.
-- Periodic push disturbance is active by adding sampled horizontal/yaw velocity impulses to the local base `qvel`.
-- Local solver randomization is active for MuJoCo solver iteration count and tolerance scale.
-- Contact randomization is active for matched ground/terrain geoms through reset-safe `solref`, `solimp`, and `margin`
-  updates.
-- Rough reward terms are now computed by the runtime:
-  - `feet_air_time`
-  - `foot_clearance`
-  - `body_ang_vel_l2`
-  - `stand_still`
-  - `joint_deviation_l1`
-- `illegal_contact` termination is active through OrcaGym contact queries. It flags non-foot robot-body contact with the
-  world as terminal.
-- Reset-time rough heightfield resampling is active for observation terrain. Physical terrain switching still waits on
-  the terrain import/publish path.
-
-Partially working / metadata-only:
-
-- `RayCasterCfg` is not an OrcaLab raycaster yet. It describes scan shape and frame metadata, while the runtime scan is
-  computed from the generated heightfield in Python.
-- `ContactSensorCfg` and `nonfoot_ground_contact` are still metadata for the exact sensor declaration. Actual contact
-  checks use OrcaGym contact queries and robot/world body matching.
-- `randomize_terrain` now resamples the generated heightfield for observations on reset. Physical terrain tile switching
-  is not implemented until terrain import/publish is wired.
-- `terrain_levels` exists as curriculum metadata, but there is no terrain difficulty update loop yet.
-- Force-thresholded illegal contact is not exact yet because the current runtime uses body/contact matching rather than
-  a named-pair force sensor.
-- Damping, armature, joint friction, richer motor delay dynamics, and full body-inertia tensor randomization are not
-  implemented yet.
-
-Not working yet / blocked by OrcaLab integration:
-
-- Generated OBJ/heightfield is not inserted into the OrcaLab scene.
-- Robot foot collision still occurs against whatever ground exists in the current OrcaLab scene, usually flat ground.
-- Height scan and physical collision can disagree until the generated mesh is imported/published into OrcaLab.
-- `terrain.physics_enabled=True` should not be treated as complete rough physics until mesh import/publish is wired.
-- The runtime does not yet verify that the exported/imported terrain mesh exactly matches the generated heightfield used
-  for height scans.
-
-Missing implementation checklist:
-
-- Add an OrcaLab terrain publisher/importer that consumes `HeightField.to_mesh()` or a native heightfield payload.
-- Attach the imported terrain mesh to the scene with collision enabled and material/friction parameters from
-  `TerrainCfg`.
-- Make `terrain.physics_enabled=True` fail loudly if no terrain collision backend is available.
-- Replace Python heightfield scan with OrcaLab raycast only if OrcaLab can raycast against the same imported terrain;
-  otherwise keep Python scan as the source of truth.
-- Add RemoteEnv-specific setters for local-domain-randomization parity if training later moves away from
-  `OrcaGymLocalEnv`.
-- Implement physical terrain tile selection and terrain curriculum progression after terrain collision import works.
-- Upgrade `illegal_contact` to use the declared `nonfoot_ground_contact` force-thresholded selector when OrcaLab exposes
-  filtered contact-force queries.
-- Add a visual/debug command that exports the terrain mesh and a small image/array summary of the sampled height scan.

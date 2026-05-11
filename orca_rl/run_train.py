@@ -35,6 +35,21 @@ def main() -> None:
     parser.add_argument("--wandb-project", default=None, help="W&B project name. Defaults to the runner config value.")
     parser.add_argument("--wandb-entity", default=None, help="W&B entity/user/team. Sets WANDB_USERNAME for RSL-RL.")
     parser.add_argument("--wandb-mode", choices=("online", "offline", "disabled"), default=None)
+    render_group = parser.add_mutually_exclusive_group()
+    render_group.add_argument(
+        "--headless",
+        "--no-render",
+        dest="headless",
+        action="store_true",
+        default=True,
+        help="Run training without viewer/camera rendering. This is the default.",
+    )
+    render_group.add_argument(
+        "--render",
+        dest="headless",
+        action="store_false",
+        help="Enable human rendering for short visual training/debug runs.",
+    )
     parser.add_argument(
         "--remote",
         default=None,
@@ -44,6 +59,8 @@ def main() -> None:
 
     task_cfg, train_cfg = load_task_and_train_cfg(args.config)
     apply_remote_override(task_cfg, args.remote)
+    task_cfg.setdefault("sim", {})["headless"] = bool(args.headless)
+    task_cfg["sim"]["render_mode"] = "none" if args.headless else "human"
     if args.num_envs is not None:
         if args.num_envs <= 0:
             raise ValueError("--num-envs must be a positive integer.")
@@ -83,7 +100,8 @@ def main() -> None:
         env = make_locomotion_vec_env(
             task_cfg,
             device=device,
-            render_mode=task_cfg.get("sim", {}).get("render_mode", "none"),
+            render_mode=task_cfg["sim"]["render_mode"],
+            headless=bool(task_cfg["sim"]["headless"]),
         )
     except ImportError as exc:
         raise explain_missing_runtime_dependency(exc) from exc
