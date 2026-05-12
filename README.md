@@ -1,120 +1,107 @@
 # Orca RL
 
-Standalone RSL-RL bridge package for OrcaLab / OrcaGym.
+Orca RL 是一个把 RSL-RL 接到 OrcaLab / OrcaGym / MuJoCo 生态里的独立训练项目。当前主要目标是让 Unitree G1 / GO2 的速度跟踪任务可以用 RSL-RL 训练，并逐步靠近 mjlab / IsaacLab 的配置风格、任务结构和大规模并行训练体验。
 
-Current targets:
+当前支持：
 
-- Unitree GO2
-- Unitree G1
-- flat and rough velocity tracking
-- asymmetric actor-critic with privileged observations
-- bounded residual joint-target actions
+- Unitree G1 flat velocity training
+- Unitree G1 rough velocity training
+- Unitree GO2 flat velocity scene binding
+- Unitree GO2 rough velocity config metadata
+- RSL-RL OnPolicyRunner 接入
+- actor / privileged critic 观测
+- residual joint target action
+- local MuJoCo headless training
+- G1 batched local MJCF 训练
+- G1 local rough terrain physical hfield
+- 实验性 `mujoco_warp` step backend
+- OrcaLab scene play / debug 路径
 
-Install the runtime dependencies inside the OrcaLab environment:
+## 当前结论
+
+训练主路径现在是：
+
+```text
+RSL-RL
+  -> OrcaRslRlVecEnv
+  -> BatchedOrcaLocomotionTask
+  -> OrcaGymLocalEnv
+  -> local MuJoCo MjModel / MjData
+```
+
+G1 headless 训练默认不再要求手动打开 OrcaLab 场景，也不通过远端 gRPC 跑仿真。它会从本地 G1 MJCF 生成一个 batched XML，然后用 `OrcaGymLocalEnv` 在本地进程里跑 MuJoCo。
+
+实验性 MJWarp 路径是：
+
+```text
+OrcaGymLocalEnv 加载本地 MuJoCo model
+  -> orca_rl 拿到 _mjModel / _mjData
+  -> mujoco_warp.step(...)
+  -> 同步回 CPU MjData
+  -> 复用现有 numpy obs / reward / contact
+```
+
+它能跑，但不是最终快路径。真正像 mjlab 一样快，需要单机器人 model + `mujoco_warp.put_data(nworld=num_envs)` + torch/warp 版 observation / reward / reset / contact，不应该每步同步回 CPU。
+
+## 安装
+
+在 OrcaLab Python 环境里安装：
 
 ```bash
-pip install --extra-index-url https://py.mujoco.org -r requirements.txt
+pip install -r requirements.txt
 ```
 
-When working from the original OrcaPlayground tree instead of the standalone `orca_rl` repository, use
-`pip install --extra-index-url https://py.mujoco.org -r orca_rl/requirements.txt`.
+`requirements.txt` 已经包含：
 
-`requirements.txt` now follows the MJWarp experiment line and installs MuJoCo 3.8, `warp-lang`, and
-`mujoco-warp`. `orca-gym 26.4.3` still declares `mujoco==3.5.0`, so pip may report a resolver warning. For current
-headless training this is acceptable because the G1 path uses local MuJoCo directly, and the tested CPU local path still
-runs under MuJoCo 3.8. Keep this in mind if you later rely on an OrcaGym release feature that assumes exactly 3.5.
-
-Before launching GO2, place exactly one GO2 actor in the OrcaLab scene. The scene binding requires the GO2 joints,
-actuators, contact sites, foot bodies, and touch sensors to match the asset suffixes used by
-`orca_rl.rsl_env.robot_configs.GO2_CONFIG`.
-
-The canonical task configs follow an mjlab/IsaacLab-style Python layout:
-
-- `tasks/velocity/config/g1/env_cfgs.py`
-- `tasks/velocity/config/g1/rl_cfg.py`
-- `tasks/velocity/config/go2/env_cfgs.py`
-- `tasks/velocity/config/go2/rl_cfg.py`
-
-Programmatic use is exposed through the top-level package:
-
-```python
-from orca_rl import load_task_and_train_cfg, make_locomotion_vec_env
-from orca_rl.tasks.velocity.config import (
-    unitree_g1_flat_env_cfg,
-    unitree_g1_rough_env_cfg,
-    unitree_go2_flat_env_cfg,
-    unitree_go2_rough_env_cfg,
-)
+```text
+mujoco>=3.8.0.dev0
+warp-lang>=1.12.0
+mujoco-warp
+rsl-rl-lib
+torch
+tensordict
+onnx / onnxscript
+tensorboard / wandb
 ```
 
-Registered task names are available for normal command-line use:
+注意：`orca-gym 26.4.3` 仍声明固定依赖 `mujoco==3.5.0`。本项目现在按 MJWarp 实验路线使用 MuJoCo 3.8。当前 G1 local training 在 MuJoCo 3.8 下测试通过，但如果后面使用 OrcaGym 某些强依赖 3.5 的功能，需要重新验证。
+
+## 快速命令
+
+列出注册任务：
 
 ```bash
 python -m orca_rl.run_train --list-tasks
 ```
 
-Built-in registered tasks:
+当前注册任务：
 
-- `Unitree-G1-Flat`
-- `Unitree-G1-Rough`
-- `Unitree-GO2-Flat`
-- `Unitree-GO2-Rough`
+```text
+Unitree-G1-Flat
+Unitree-G1-Rough
+Unitree-GO2-Flat
+Unitree-GO2-Rough
+```
 
-The Orca runtime side is robot-neutral: `rsl_env/adapters/vecenv.py` creates the RSL-RL VecEnv, and
-`rsl_env/batched_locomotion_task.py` runs all robot agents inside one local MuJoCo runtime per simulator group.
-Robot-specific binding is selected through each config's `scene_binding.resolver` alias. Built-in aliases are `g1` and
-`go2`; custom import paths are still supported for new assets.
-
-When train/play/eval starts, Orca RL prints a terminal runtime summary with the selected device and GPU, observation
-dimensions, action dimensions, reward terms, termination terms, commands, domain randomization, terrain, sensors,
-curriculum, and scene binding.
-
-For G1, headless training uses a local MJCF clone-tiling path by default: one source G1 XML is cloned into
-`g1_000`, `g1_001`, ... inside a generated local MuJoCo XML under
-`/tmp/orca_rl_mjcf`. This path does not require an OrcaLab scene, does not require the `localhost:50051` gRPC service,
-and does not publish actors into the OrcaLab layout.
-
-RSL-RL parallelism is configured with the usual `num_envs` meaning. Use the config's `num_envs` field or override it
-from the CLI:
+训练 G1 flat：
 
 ```bash
 python -m orca_rl.run_train \
   --config Unitree-G1-Flat \
-  --num-envs 8
+  --headless \
+  --num-envs 24
 ```
 
-The adapter resolves exactly that many complete scene robot bindings and exposes exactly that many environments to
-RSL-RL. There is no user-facing `subenv_num * agent_num` product in the Orca RL config.
-
-Orca RL batches all resolved agents into one local MuJoCo runtime per simulator group. For example, G1
-`--num-envs 4096` creates one RSL-RL VecEnv with 4096 logical environments but one simulator group, so stepping no
-longer creates or advances 4096 separate `OrcaGymLocalEnv` Python wrappers. Multiple comma-separated remote addresses
-still split non-local scene-backed runs across one simulator group per address.
-
-G1 auto-publish is disabled by default to avoid accidentally inserting thousands of actors into the OrcaLab scene. If
-you want to train against an OrcaLab-authored scene instead of the generated local MJCF, set
-`scene_binding.local_xml_path = None` and prepare the scene explicitly.
-
-Train GO2:
+训练 G1 rough：
 
 ```bash
 python -m orca_rl.run_train \
-  --config Unitree-GO2-Flat \
-  --headless
+  --config Unitree-G1-Rough \
+  --headless \
+  --num-envs 24
 ```
 
-Train G1:
-
-```bash
-python -m orca_rl.run_train \
-  --config Unitree-G1-Flat \
-  --headless
-```
-
-Training is headless by default, so `--headless` / `--no-render` is mostly there to make the intent explicit in launch
-scripts. Use `--render` only for short training-debug runs where you want the viewer updated during learning.
-
-Experimental MJWarp stepping can be enabled for local headless training:
+实验性 MJWarp step：
 
 ```bash
 python -m orca_rl.run_train \
@@ -124,14 +111,7 @@ python -m orca_rl.run_train \
   --sim-backend mjwarp
 ```
 
-This keeps `OrcaGymLocalEnv` as the loader/metadata layer, but replaces the local `mujoco.mj_step(...)` call with
-`mujoco_warp.step(...)`. After each control step the GPU state is synchronized back to CPU `MjData` so the existing
-observation, reward, reset, and contact code remains compatible. The first launch compiles Warp kernels and can be slow;
-subsequent launches use the Warp cache. This is a compatibility bridge, not yet mjlab's full zero-copy `nworld`
-architecture, so it may be slower than CPU for small batches until observations/contact handling move fully onto GPU.
-The default backend remains `orca_cpu`.
-
-Visual playback/debugging stays in `run_play`:
+OrcaLab scene 可视化 play：
 
 ```bash
 python -m orca_rl.run_play \
@@ -139,11 +119,22 @@ python -m orca_rl.run_play \
   --ckpt <path_to_checkpoint>
 ```
 
-`run_play` defaults to the visual OrcaLab scene path instead of local MuJoCo for G1. It disables
-`scene_binding.local_xml_path`, requires the OrcaGym gRPC server, and can auto-publish the configured G1 asset when the
-scene does not already contain a complete G1 binding. This keeps play useful for visual debugging in OrcaStudio.
+Unitree/mjlab 训练出的 G1 checkpoint 在 OrcaLab scene 中 play：
 
-To play through the generated local MuJoCo XML anyway:
+```bash
+python -m orca_rl.run_play \
+  --config Unitree-G1-Flat \
+  --policy-backend mjlab \
+  --ckpt third_party/unitree_rl_mjlab/logs/rsl_rl/g1_velocity/<run>/model_<iter>.pt
+```
+
+如果不传 `--ckpt`，会自动寻找：
+
+```text
+third_party/unitree_rl_mjlab/logs/rsl_rl/g1_velocity/*/model_*.pt
+```
+
+本地 MuJoCo play：
 
 ```bash
 python -m orca_rl.run_play \
@@ -152,313 +143,1045 @@ python -m orca_rl.run_play \
   --local-mujoco
 ```
 
-Train GO2 rough terrain config:
+评估 checkpoint：
+
+```bash
+python -m orca_rl.run_eval \
+  --config Unitree-G1-Flat \
+  --ckpt <path_to_checkpoint> \
+  --steps 2000
+```
+
+导出 rough terrain OBJ：
+
+```bash
+python -m orca_rl.terrains.export \
+  --config Unitree-G1-Rough \
+  --out generated_terrains/g1_rough.obj
+```
+
+## 后端说明
+
+### `orca_cpu`
+
+默认训练后端。
+
+```text
+local MJCF
+  -> OrcaGymLocalEnv
+  -> mujoco.mj_step
+  -> numpy obs/reward/contact
+```
+
+优点：
+
+- 当前最稳定。
+- G1 flat / rough smoke 通过。
+- rough hfield 已经是真 MuJoCo collision geom。
+- 与现有 OrcaGym query / scene binding 兼容。
+
+缺点：
+
+- 还是 CPU MuJoCo。
+- 4096 环境靠 clone 到同一个 XML，不是 mjlab 那种 `nworld`。
+- 大量 contact / observation / reward 仍然在 CPU / numpy。
+
+### `mjwarp`
+
+实验性后端。
+
+```text
+OrcaGymLocalEnv 初始化 model/data
+  -> MjWarpRuntime
+  -> mujoco_warp.step
+  -> sync_to_cpu
+  -> 原有 obs/reward/contact
+```
+
+优点：
+
+- 已经证明 G1 flat / rough 可以通过 `mujoco_warp.step` 跑完 1 iteration。
+- `frame_skip` step 已做 CUDA graph capture。
+- 可以作为接入 MuJoCo 3.8 / MJWarp 的实验桥。
+
+缺点：
+
+- 每个 control step 后仍同步回 CPU。
+- 观测、奖励、contact 仍然走原来的 numpy 代码。
+- 小 batch 下可能比 CPU 慢。
+- 不是 mjlab 的最终 GPU 架构。
+
+### 未来 `mjwarp_nworld`
+
+真正想要 mjlab 速度，应当新增独立后端：
+
+```text
+single robot MJCF
+  -> mujoco_warp.put_model(model)
+  -> mujoco_warp.put_data(model, data, nworld=num_envs)
+  -> torch obs / reward / done / reset
+  -> RSL-RL
+```
+
+这条路径不应该依赖 `OrcaGymLocalEnv` 的 CPU query API。OrcaGym 可以继续用于 play、asset 管理、scene 可视化，但训练热路径要避免 CPU 同步。
+
+## Policy ABI
+
+训练出来的 policy 是否能放回 OrcaGym play，取决于 policy ABI 是否一致。
+
+必须保持一致的内容：
+
+- actor observation shape
+- actor observation 顺序
+- observation scale
+- body-frame / world-frame 坐标变换
+- quaternion 格式，当前是 MuJoCo `wxyz`
+- action 维度
+- joint / actuator 顺序
+- residual joint target 到 PD torque 的映射
+- command 表示
+- rough height scan 维度和语义
+
+当前 G1 flat actor observation：
+
+```text
+base_ang_vel_body
+projected_gravity
+command
+joint_pos_rel
+joint_vel
+last_action
+```
+
+Unitree/mjlab G1 flat policy 不是这个旧 Orca 观测。它的 actor observation 是 98 维：
+
+```text
+base_ang_vel_body
+projected_gravity
+command
+phase(sin, cos)
+joint_pos_rel
+joint_vel
+last_action
+```
+
+所以 OrcaLab play 接 mjlab checkpoint 时必须加：
+
+```bash
+--policy-backend mjlab
+```
+
+这个后端会：
+
+```text
+1. 直接读取 Unitree/mjlab RSL-RL checkpoint 里的 actor_state_dict
+2. 构造 mjlab 的 98 维 G1 actor observation
+3. 使用 mjlab 的 action_scale = 0.25 * effort / stiffness
+4. 使用 mjlab 的 G1 stiffness / damping / effort limit 把 residual joint target 转成 motor torque
+5. 把 torque 写回 OrcaLab / OrcaGym 的 G1 motor actuator
+```
+
+也就是说，训练热路径可以完全走 `unitree_rl_mjlab`，可视化和场景调试可以回到 OrcaLab play。
+
+G1 rough actor observation 额外包含：
+
+```text
+height_scan
+```
+
+G1 action 是 29 维，顺序来自：
+
+```text
+G1_JOINT_SUFFIXES
+G1_ACTUATOR_SUFFIXES
+```
+
+只要未来 MJWarp nworld 后端严格复刻这些 ABI，训练出的 actor 就可以放回 OrcaGym play。
+
+## 项目结构
+
+```text
+orca_rl/
+├── README.md
+├── RSL_RL_RESTRUCTURE_REPORT.md
+├── TODO_headless_rendering.md
+├── pyproject.toml
+├── requirements.txt
+└── orca_rl/
+    ├── __init__.py
+    ├── diagnostics.py
+    ├── list_tasks.py
+    ├── registry.py
+    ├── run_train.py
+    ├── run_play.py
+    ├── run_eval.py
+    ├── utils.py
+    ├── managers/
+    │   └── __init__.py
+    ├── sensor/
+    │   ├── __init__.py
+    │   └── config.py
+    ├── terrains/
+    │   ├── __init__.py
+    │   ├── config.py
+    │   ├── export.py
+    │   └── generator.py
+    ├── rsl_env/
+    │   ├── __init__.py
+    │   ├── action_mapper.py
+    │   ├── batched_locomotion_task.py
+    │   ├── curriculum.py
+    │   ├── local_mjcf.py
+    │   ├── math_utils.py
+    │   ├── mjwarp_runtime.py
+    │   ├── model_scanner.py
+    │   ├── obs_builder.py
+    │   ├── randomization.py
+    │   ├── rendering.py
+    │   ├── reward_manager.py
+    │   ├── robot_configs.py
+    │   ├── runtime_policy.py
+    │   ├── scene_binding.py
+    │   ├── scene_resolvers.py
+    │   ├── termination_manager.py
+    │   ├── terrain_runtime.py
+    │   └── adapters/
+    │       ├── __init__.py
+    │       ├── factory.py
+    │       └── vecenv.py
+    └── tasks/
+        ├── __init__.py
+        └── velocity/
+            ├── __init__.py
+            ├── config_types.py
+            ├── velocity_env_cfg.py
+            ├── config/
+            │   ├── __init__.py
+            │   ├── g1/
+            │   │   ├── __init__.py
+            │   │   ├── env_cfgs.py
+            │   │   └── rl_cfg.py
+            │   └── go2/
+            │       ├── __init__.py
+            │       ├── env_cfgs.py
+            │       └── rl_cfg.py
+            └── mdp/
+                ├── __init__.py
+                ├── actions.py
+                ├── commands.py
+                ├── curriculums.py
+                ├── events.py
+                ├── observations.py
+                ├── rewards.py
+                ├── terminations.py
+                └── terrain_utils.py
+```
+
+## 根目录文件
+
+### `README.md`
+
+项目主说明文档。说明当前后端、训练命令、项目结构、已实现功能和未解决问题。
+
+### `RSL_RL_RESTRUCTURE_REPORT.md`
+
+早期 RSL-RL 接入 OrcaLab 的重构报告。记录过渡版本、接口设计、观测/action 对齐思路，以及为什么后面切到本地 MJCF 路线。
+
+### `TODO_headless_rendering.md`
+
+headless/no-rendering 任务记录。现在主要作为历史 TODO 和完成状态记录。
+
+### `requirements.txt`
+
+运行依赖。当前包含 MuJoCo 3.8、MJWarp、Warp、RSL-RL、Torch、TensorDict、ONNX、TensorBoard、W&B。
+
+### `pyproject.toml`
+
+Python 包元数据。定义 `orca-rl` 包名、依赖、setuptools 包发现规则。
+
+### `.gitignore`
+
+Git 忽略规则。避免日志、缓存、构建产物进入仓库。
+
+## 顶层 Python 入口
+
+### `orca_rl/__init__.py`
+
+顶层懒加载入口。导出：
+
+- `OrcaRslRlVecEnv`
+- `make_locomotion_vec_env`
+- `load_task_and_train_cfg`
+- `print_runtime_summary`
+- `list_tasks`
+- `get_task_spec`
+
+### `orca_rl/run_train.py`
+
+训练入口。负责：
+
+- 解析 CLI 参数。
+- 加载 task config 和 RSL-RL runner config。
+- 应用 `--num-envs`、`--headless`、`--render`、`--remote`、`--logger`、`--wandb` 等覆盖。
+- 支持 `--sim-backend orca_cpu|mjwarp`。
+- 创建 RSL-RL VecEnv。
+- 创建 `OnPolicyRunner`。
+- 执行 `runner.learn()`。
+- 保存 `model_last.pt` 和 `model_final.pt`。
+- 导出 ONNX / JIT policy。
+
+### `orca_rl/run_play.py`
+
+play / 可视化入口。负责：
+
+- 加载 checkpoint。
+- 默认使用 OrcaLab scene 路径。
+- G1 play 默认关闭 `local_xml_path`，让 scene binding 回到 OrcaLab actor 申请/绑定方式。
+- 支持 `--local-mujoco`，强制使用本地 MJCF play。
+- 按 `control_dt` 实时 sleep，便于视觉检查策略。
+
+### `orca_rl/run_eval.py`
+
+评估入口。负责：
+
+- 加载 checkpoint。
+- headless 运行固定步数。
+- 统计平均 reward 和 done 数量。
+
+### `orca_rl/list_tasks.py`
+
+小 CLI。打印当前注册任务列表。
+
+### `orca_rl/registry.py`
+
+任务注册表。负责：
+
+- `register_task`
+- `list_tasks`
+- `get_task_spec`
+- `load_registered_task`
+
+内置注册：
+
+- `Unitree-G1-Flat`
+- `Unitree-G1-Rough`
+- `Unitree-GO2-Flat`
+- `Unitree-GO2-Rough`
+
+### `orca_rl/diagnostics.py`
+
+训练/play/eval 启动前的 runtime summary。打印：
+
+- 任务名
+- robot
+- device / GPU
+- num_envs
+- num_actions
+- max episode length
+- control dt
+- sim backend
+- obs 维度
+- action 参数
+- reward / termination / command / randomization / terrain / sensor / curriculum
+- scene binding source
+- generated XML path
+
+### `orca_rl/utils.py`
+
+通用工具。负责：
+
+- 项目根目录加入 `sys.path`
+- 加载 Python config
+- 解析 `file.py:factory_name`
+- 加载注册任务
+- 应用 remote override
+- W&B 参数覆盖
+- 检查 OrcaGym 地址
+- local MJCF headless 时跳过 gRPC 检查
+- 创建 log dir
+- 查找最新 checkpoint
+- 保存 checkpoint alias
+
+## RSL-RL 环境层
+
+### `orca_rl/rsl_env/adapters/factory.py`
+
+环境工厂。`make_locomotion_vec_env()` 会返回 `OrcaRslRlVecEnv`。
+
+### `orca_rl/rsl_env/adapters/vecenv.py`
+
+RSL-RL `VecEnv` 适配器。负责：
+
+- 接收 task config。
+- 解析 headless/render mode。
+- 调 scene binding resolver。
+- 创建一个或多个 `BatchedOrcaLocomotionTask`。
+- 拼接多个 simulator group 的 obs/reward/done。
+- 把 numpy 结果转成 torch `TensorDict`。
+- 聚合 log extras。
+
+### `orca_rl/rsl_env/batched_locomotion_task.py`
+
+当前训练核心。它继承 `OrcaGymLocalEnv`，一个实例里同时管理多个 robot agent。
+
+负责：
+
+- 加载 local MJCF 或 OrcaLab scene。
+- 初始化 agent runtime。
+- 解析 qpos/qvel/actuator/body/site/sensor offset。
+- 批量 action -> torque。
+- 调 MuJoCo step。
+- 读取 state。
+- 构造 obs。
+- 计算 reward。
+- 计算 termination。
+- reset done env。
+- local domain randomization。
+- rough terrain runtime 对齐。
+- 可选 `mjwarp` step backend。
+
+### `orca_rl/rsl_env/mjwarp_runtime.py`
+
+实验性 MJWarp 桥。负责：
+
+- 从已有 `MjModel/MjData` 创建 `mjwarp.Model/Data`。
+- 暴露 qpos/qvel/ctrl 等 torch view。
+- 用 `mujoco_warp.step()` 跑 GPU physics。
+- 捕获 `frame_skip` step CUDA graph。
+- 将 GPU state 同步回 CPU `MjData`。
+
+当前限制：
+
+- 只是 `OrcaGymLocalEnv` 兼容桥。
+- `nworld` 当前固定为 1。
+- 不是最终 mjlab nworld 快路径。
+
+### `orca_rl/rsl_env/action_mapper.py`
+
+action 映射。负责：
+
+- policy action clip。
+- `[-1, 1]` action 到 residual joint target。
+- joint limit safety scale。
+- `max_delta` 限制。
+- PD torque 计算。
+- torque limit clip。
+
+### `orca_rl/rsl_env/obs_builder.py`
+
+观测构造。负责：
+
+- `LocomotionTaskState` 数据结构。
+- actor obs 拼接。
+- privileged critic obs 拼接。
+- body frame velocity。
+- projected gravity。
+- command scale。
+- dof pos/vel scale。
+- height scan padding。
+- actor observation noise。
+
+### `orca_rl/rsl_env/reward_manager.py`
+
+速度任务 reward。负责：
+
+- linear velocity tracking。
+- yaw velocity tracking。
+- z velocity penalty。
+- orientation penalty。
+- base height penalty。
+- torque penalty。
+- action rate penalty。
+- joint limit penalty。
+- foot slip penalty。
+- feet air time。
+- foot clearance。
+- body angular velocity。
+- stand still。
+- joint deviation。
+- termination penalty。
+
+### `orca_rl/rsl_env/termination_manager.py`
+
+termination 判断。负责：
+
+- too low。
+- too high。
+- too tilted。
+- invalid state。
+- base contact。
+- illegal contact。
+
+### `orca_rl/rsl_env/curriculum.py`
+
+命令采样。当前主要是 `FlatVelocityCommandSampler`：
+
+- 采样 `lin_vel_x`
+- 采样 `lin_vel_y`
+- 采样 `yaw_vel`
+- 支持 command resample interval
+
+### `orca_rl/rsl_env/randomization.py`
+
+domain randomization。负责：
+
+- friction scale。
+- base mass delta。
+- base inertia scale。
+- base COM offset。
+- kp scale。
+- kd scale。
+- torque scale。
+- action delay steps。
+- push velocity。
+- solver iterations。
+- solver tolerance。
+- contact solref/solimp/margin scale。
+
+### `orca_rl/rsl_env/terrain_runtime.py`
+
+Python 侧 terrain runtime。负责：
+
+- 从 task cfg 生成 heightfield。
+- height at `(x, y)` 查询。
+- yaw-aware height scan。
+- 导出 terrain mesh。
+- rough physical terrain 已编入 MJCF 时禁止 reset-time resample，避免物理/观测不一致。
+
+### `orca_rl/rsl_env/local_mjcf.py`
+
+本地 MJCF 生成器。负责：
+
+- 找到 G1 source XML。
+- clone robot root body。
+- prefix body/joint/actuator/site/sensor 名字。
+- rewrite XML references。
+- 删除 keyframe。
+- 生成 batched local XML。
+- rough 时加入 MuJoCo `hfield` collision geom。
+- 移除旧 floor/plane。
+- 根据 `num_envs` 调整 terrain 覆盖范围。
+- 给 rough XML 加 terrain hash 后缀。
+
+### `orca_rl/rsl_env/scene_binding.py`
+
+robot scene binding。负责：
+
+- G1 / GO2 scene resolver。
+- G1 local XML path resolver。
+- G1 local MJCF batch 生成。
+- OrcaLab scene 扫描。
+- G1 auto-publish。
+- robot config 组装。
+
+### `orca_rl/rsl_env/scene_resolvers.py`
+
+resolver alias 映射。负责：
+
+- `"g1"` -> `resolve_g1_scene_binding`
+- `"go2"` -> `resolve_go2_scene_binding`
+- 支持自定义 import path resolver。
+
+### `orca_rl/rsl_env/model_scanner.py`
+
+OrcaLab scene 模型扫描。负责：
+
+- 根据 suffix template 扫描 complete robot match。
+- 判断 joints / actuators / sites / sensors 是否完整。
+- 在 scene 缺 robot 时给提示。
+
+### `orca_rl/rsl_env/robot_configs.py`
+
+GO2 robot config。包含：
+
+- base joint 名字。
+- leg joint 名字。
+- actuator 名字。
+- contact site 名字。
+- foot body 名字。
+- motor 参数。
+- action scale。
+
+G1 config 目前主要在 `scene_binding.py` 内生成，因为 G1 joint/action 列表比较长。
+
+### `orca_rl/rsl_env/runtime_policy.py`
+
+policy runtime 工具。负责：
+
+- 加载 RSL-RL inference runner。
+- 导出 JIT。
+- 导出 ONNX。
+- 保存 inference policy。
+
+### `orca_rl/rsl_env/rendering.py`
+
+渲染模式解析。负责：
+
+- headless 默认值。
+- `render_mode` 规范化。
+- `human` / `none` 区分。
+
+### `orca_rl/rsl_env/math_utils.py`
+
+数学工具。负责：
+
+- MuJoCo `wxyz` quaternion 到 rotation matrix。
+- yaw quaternion。
+- quaternion multiply。
+- safe clip。
+
+## Task / Config 层
+
+### `orca_rl/tasks/velocity/config_types.py`
+
+mjlab / IsaacLab 风格的配置 dataclass。定义：
+
+- `SceneEntityCfg`
+- `TermCfg`
+- `EventTermCfg`
+- `ObservationTermCfg`
+- `ObservationGroupCfg`
+- `UniformVelocityCommandCfg`
+- `JointPositionActionCfg`
+- `LocomotionEnvCfg`
+- RSL-RL actor/critic/algorithm/runner cfg
+
+同时负责把结构化配置转成当前 runtime 使用的 legacy dict。
+
+### `orca_rl/tasks/velocity/velocity_env_cfg.py`
+
+velocity task 通用配置工厂。负责：
+
+- flat velocity base config。
+- rough velocity base config。
+- actor/critic observation term。
+- reward term。
+- termination term。
+- reset event。
+- randomization event。
+- terrain scan metadata。
+- nonfoot contact metadata。
+- rough reward/termination/curriculum metadata。
+
+### `orca_rl/tasks/velocity/config/g1/env_cfgs.py`
+
+G1 env config。负责：
+
+- G1 flat config。
+- G1 rough config。
+- G1 action max delta。
+- G1 scene binding。
+- G1 reset noise。
+- G1 base height / tilt limit。
+- G1 reward scale。
+- G1 local XML 默认开启。
+
+### `orca_rl/tasks/velocity/config/g1/rl_cfg.py`
+
+G1 RSL-RL PPO runner config。负责：
+
+- actor MLP 结构。
+- critic MLP 结构。
+- Gaussian distribution。
+- PPO 超参。
+- experiment name。
+- run name。
+- save interval。
+- rollout length。
+- max iteration。
+
+### `orca_rl/tasks/velocity/config/go2/env_cfgs.py`
+
+GO2 env config。负责：
+
+- GO2 flat config。
+- GO2 rough config metadata。
+- GO2 action max delta。
+- GO2 scene binding。
+- GO2 reward scale。
+- GO2 rough physical terrain 当前关闭，避免 scene-backed 路径误以为有 local hfield。
+
+### `orca_rl/tasks/velocity/config/go2/rl_cfg.py`
+
+GO2 RSL-RL PPO runner config。结构同 G1。
+
+## MDP 声明层
+
+### `orca_rl/tasks/velocity/mdp/actions.py`
+
+动作 term 占位/声明。用于配置 metadata，运行时由 `action_mapper.py` 实现。
+
+### `orca_rl/tasks/velocity/mdp/commands.py`
+
+命令 term 占位/声明。用于配置 metadata，运行时由 `curriculum.py` 采样。
+
+### `orca_rl/tasks/velocity/mdp/observations.py`
+
+观测 term 占位/声明。用于配置 metadata，运行时由 `obs_builder.py` 实现。
+
+### `orca_rl/tasks/velocity/mdp/rewards.py`
+
+reward term 占位/声明。用于配置 metadata，运行时由 `reward_manager.py` 实现。
+
+### `orca_rl/tasks/velocity/mdp/terminations.py`
+
+termination term 占位/声明。用于配置 metadata，运行时由 `termination_manager.py` 实现。
+
+### `orca_rl/tasks/velocity/mdp/events.py`
+
+event / randomization term 占位/声明。用于配置 metadata，运行时由 `randomization.py` 和 reset 逻辑实现。
+
+### `orca_rl/tasks/velocity/mdp/curriculums.py`
+
+curriculum term 占位/声明。当前 terrain level metadata 已有，但真实 progression 还未接上。
+
+### `orca_rl/tasks/velocity/mdp/terrain_utils.py`
+
+terrain 相关 MDP 工具占位/辅助。用于 rough config 的 terrain metadata 对齐。
+
+## Sensor 层
+
+### `orca_rl/sensor/config.py`
+
+sensor dataclass。定义：
+
+- `ContactMatchCfg`
+- `ContactSensorCfg`
+- `GridPatternCfg`
+- `RayCasterCfg`
+
+这些当前主要是配置 metadata。实际 contact / height scan 由 runtime 手写逻辑实现。
+
+## Terrain 层
+
+### `orca_rl/terrains/config.py`
+
+terrain config dataclass。定义：
+
+- `SubTerrainCfg`
+- `TerrainGeneratorCfg`
+- `TerrainCfg`
+
+### `orca_rl/terrains/generator.py`
+
+heightfield 生成器。负责：
+
+- plane heightfield。
+- random uniform。
+- pyramid stairs。
+- discrete obstacles。
+- wave terrain。
+- height interpolation。
+- height scan sampling。
+- heightfield 转 OBJ mesh。
+
+### `orca_rl/terrains/export.py`
+
+terrain 导出 CLI。把当前任务配置中的 terrain 导出成 OBJ，并打印 heightfield shape / resolution / origin。
+
+## Managers 目录
+
+### `orca_rl/managers/__init__.py`
+
+当前是占位包。项目曾经向 mjlab manager-style config 靠拢，但实际运行时 manager 目前分散在 `rsl_env` 的 action / obs / reward / termination / randomization 模块里。
+
+## 训练数据流
+
+### CPU local 训练
+
+```text
+run_train.py
+  -> load_task_and_train_cfg
+  -> make_locomotion_vec_env
+  -> OrcaRslRlVecEnv
+  -> resolve_g1_scene_binding
+  -> build_local_mjcf_batch
+  -> BatchedOrcaLocomotionTask
+  -> OrcaGymLocalEnv.initialize_simulation
+  -> mujoco.MjModel.from_xml_path
+  -> runner.learn
+```
+
+每步：
+
+```text
+policy(obs)
+  -> action mapper
+  -> PD torque
+  -> MuJoCo ctrl
+  -> mujoco.mj_step
+  -> update_data
+  -> query contact / foot pos
+  -> read state
+  -> reward / done
+  -> observation builder
+  -> RSL-RL update
+```
+
+### MJWarp 实验训练
+
+```text
+BatchedOrcaLocomotionTask
+  -> OrcaGymLocalEnv creates _mjModel/_mjData
+  -> MjWarpRuntime creates wp_model/wp_data
+  -> mujoco_warp.step
+  -> sync_to_cpu
+  -> existing obs/reward/contact
+```
+
+这条路径只是实验桥。它证明 G1 XML 和 rough hfield 能在 MJWarp 中跑，但由于 CPU 同步和 numpy 逻辑还在，暂时不是高性能训练方案。
+
+## 当前测试过的命令
+
+CPU local：
 
 ```bash
 python -m orca_rl.run_train \
-  --config Unitree-GO2-Rough \
-  --headless
+  --config Unitree-G1-Flat \
+  --headless \
+  --num-envs 2 \
+  --num-iterations 1
 ```
 
-Train G1 rough terrain config:
+MJWarp flat：
+
+```bash
+python -m orca_rl.run_train \
+  --config Unitree-G1-Flat \
+  --headless \
+  --num-envs 2 \
+  --num-iterations 1 \
+  --sim-backend mjwarp
+```
+
+MJWarp rough：
 
 ```bash
 python -m orca_rl.run_train \
   --config Unitree-G1-Rough \
-  --headless
-```
-
-The `file.py:factory_name` form still works as a development-mode task selector when editing new configs directly.
-
-Export the generated rough terrain mesh for later OrcaLab import:
-
-```bash
-python -m orca_rl.terrains.export \
-  --config orca_rl/tasks/velocity/config/go2/env_cfgs.py:unitree_go2_rough_env_cfg \
-  --out generated_terrains/go2_rough.obj
-```
-
-For G1 local MJCF training, rough terrain is physical now. The generated heightfield is inserted into the generated
-MuJoCo XML as an `hfield` collision geom, the old floor plane is removed, and height-scan observations/reset base
-height use the same seeded terrain runtime. Generated rough XML files include a terrain hash suffix such as:
-
-```text
-/tmp/orca_rl_mjcf/g1_29dof_old_batch_24_terrain_ed885449.xml
-```
-
-The default backend is still CPU MuJoCo physics. `--sim-backend mjwarp` is the experimental GPU stepping path.
-
-## Current Task Status
-
-Flat velocity is a training-capable baseline, not a full IsaacLab/mjlab-equivalent environment. The following pieces are
-active:
-
-- RSL-RL VecEnv integration for G1/GO2.
-- Actor and privileged critic observations.
-- Bounded residual joint-target actions.
-- PD torque control through OrcaGym.
-- Velocity command sampling.
-- Core flat rewards: linear/yaw velocity tracking, vertical velocity, orientation, base height, torque, action-rate,
-  joint-limit, foot-slip, and termination penalty.
-- Core terminations: base height range, tilt, invalid state, base contact, and timeout.
-
-Flat velocity current notes:
-
-- `randomize_friction` and `randomize_body_mass` now apply to the local MuJoCo model used by `OrcaGymLocalEnv`.
-  Friction scales matched ground/terrain geoms, and base mass is reset from a stored baseline before each sampled delta
-  is applied.
-- `manager_terms` is used for config structure and diagnostics. It does not mean every declared MDP term is independently
-  executed by a full manager framework.
-- `ContactSensorCfg` is declarative metadata. Actual foot contact still uses the available OrcaGym touch/contact query
-  path.
-- Push disturbance, actuator gain/strength randomization, action latency, solver/contact parameter randomization, and
-  base inertia/COM randomization are active in the local MuJoCo training path.
-- Flat walking is now feature-complete enough for first serious RSL-RL experiments: policy/critic observations, bounded
-  actions, rewards, terminations, reset noise, domain randomization, W&B/checkpointing, and runtime diagnostics are all
-  wired. Remaining flat work is mostly parity/quality work, not a blocking interface gap.
-
-Rough velocity adds procedural terrain observations on top of the flat baseline:
-
-- Procedural heightfield generation is active.
-- Height scan observations come from that generated heightfield and are no longer all-zero placeholders.
-- OBJ export is active for later OrcaLab import.
-- Rough runner/config selection is active through registered task names and `file.py:factory_name`.
-- G1 local MJCF rough terrain inserts the heightfield into MuJoCo physics as an `hfield` collision geom.
-- G1 rough reset/height scan/foot ground height use the same terrain config and seed as the generated MJCF.
-
-Rough velocity current notes:
-
-- G1 local MJCF rough terrain has physical collision.
-- OrcaLab scene-backed rough terrain still needs a scene-side terrain import/upload API if you want visual play against
-  the same generated terrain inside OrcaStudio.
-- `RayCasterCfg` is metadata; height scans currently use Python heightfield sampling, not OrcaLab raycast.
-- Rough rewards now computed by the runtime: `feet_air_time`, `foot_clearance`, `body_ang_vel_l2`, `stand_still`, and
-  `joint_deviation_l1`.
-- `illegal_contact` now uses OrcaGym contact queries and applies the configured force threshold when contact force is
-  available.
-- Physical terrain is compiled into the local MJCF, so reset-time terrain resampling is disabled on that path. Terrain
-  curriculum metadata exists, but the success/failure progression loop is not active yet.
-
-## Backend Capability Gaps
-
-Current training uses `OrcaGymLocalEnv`, whose MuJoCo step runs in the local Python process. That path can mutate local
-`mjModel` / `mjData` fields, so friction, mass, inertia/COM, actuator, latency, push, solver, and contact
-randomization are implemented there. A future pure `RemoteEnv` path would still need explicit server/gRPC setters for
-the same behavior.
-
-Requires OrcaLab server/gRPC capability or currently restricted release permissions:
-
-- **OrcaStudio rough terrain collision/play**: local G1 training already has physical hfield terrain in MuJoCo XML. The
-  visual OrcaLab scene path still needs `AddCollisionMesh`, `ReplaceTerrainMesh`, native heightfield upload, or scene
-  asset import/publish support if it should display and collide with the same generated rough terrain.
-- **Runtime terrain switching**: needs a server API to swap terrain mesh/heightfield or activate a terrain tile without
-  restarting the whole simulation. Required for reset-time terrain randomization and curriculum.
-- **RemoteEnv domain randomization**: the local training path is implemented. A pure remote path still needs server-side
-  setters for friction, mass, inertia/COM, actuator gains/limits, solver params, contact params, and push disturbance.
-- **Unimplemented local physics randomization variants**: damping, armature, joint friction, motor delay dynamics beyond
-  integer action latency, and full body-inertia tensor randomization beyond base inertia scaling are not active yet.
-- **True OrcaLab raycaster**: only useful if it raycasts against the same imported terrain mesh/heightfield. Until then,
-  Python heightfield sampling should remain the source of truth for height scan observations.
-- **Reliable force-thresholded non-foot contact sensors**: `illegal_contact` is active through body/contact matching, but
-  matching the declared `ContactSensorCfg(force_threshold=...)` exactly needs filtered named-pair force reporting.
-
-Can be finished inside `orca_rl` after those APIs exist:
-
-- Implement the terrain publisher/importer backend and make `terrain.physics_enabled=True` fail loudly when unavailable.
-- Wire physical terrain tile selection and terrain curriculum progression after terrain import/publish exists.
-- Add optional RemoteEnv setters for domain randomization if training ever moves away from `OrcaGymLocalEnv`.
-- Upgrade `illegal_contact` to use force-thresholded named-pair filtering when OrcaLab exposes it.
-- Add a debug command that exports the terrain mesh plus a compact height-scan preview for visual inspection.
-
-## Remaining Unwired Items
-
-Flat velocity has no known blocking interface gaps for first-stage RSL-RL training. The items below are the remaining
-unwired or partially wired pieces, with the reason they are not complete and what needs to happen next.
-
-Observed Orca / OrcaGym API state:
-
-- `orca-gym` has a hybrid design: local MuJoCo execution through `OrcaGymLocalEnv` and a gRPC remote/server API.
-- Public gRPC/proto paths currently expose model/data queries, `AddActor`, `PublishScene`, `LoadLocalEnv`,
-  `LoadContentFile`, `SetOptConfig`, `SetGeomFriction`, `QueryContactSimple`, and `QueryContactForce`.
-- The scene API can add a named actor from an already known `spawnable_name`. This is good for published assets such as
-  G1/GO2, but it is not the same as uploading an arbitrary generated terrain mesh at runtime.
-- I did not find a public RPC named like `AddCollisionMesh`, `AddHeightField`, `ReplaceTerrain`, `AddGeom`, or
-  `SetMjModel`. That means scene-backed rough terrain collision for visual play needs either an OrcaLab asset/publish
-  path or a new simulator-side API.
-- Collision is not blocked because "simulation must decide whether to collide" in some abstract way. MuJoCo already
-  computes contacts, but only between geoms that exist in the compiled `mjModel` and have valid collision settings
-  (`contype`, `conaffinity`, geom type, material/contact params, pose, scale). The local G1 training path now inserts
-  the generated heightfield into the compiled MJCF; the visual OrcaLab scene path still needs an equivalent terrain
-  upload/import capability.
-
-Remaining items:
-
-- **OrcaLab scene rough terrain physics collision**
-  - Current state: G1 local MJCF training has physical rough terrain collision; heightfield generation, height scan, and
-    OBJ export are implemented.
-  - Why not fully connected for play: the visual OrcaLab scene path still cannot upload the generated terrain into the
-    scene as a collision asset through a known public API.
-  - Best next path: ask OrcaLab to support one of these, in order of preference:
-    1. Runtime terrain upload API: `AddHeightField` / `AddCollisionMesh` / `ReplaceTerrain`, returning geom names.
-    2. Asset publish/import API: upload our OBJ/heightfield as a temporary spawnable, then `AddActor` it.
-    3. Scene XML patch/reload path for play, if OrcaLab exposes a supported way to reload a patched visual scene.
-
-- **Physical terrain randomization**
-  - Current state: local MJCF rough terrain is compiled once per generated XML.
-  - Why not fully connected: MuJoCo hfield geometry is part of the compiled model, so reset-time terrain changes need
-    a pool/tile selection strategy or model reload.
-  - Needed follow-up: keep a pool of terrain tiles and move spawn origins through terrain levels, or reload patched MJCF
-    only at coarse curriculum boundaries.
-
-- **Terrain curriculum**
-  - Current state: `terrain_levels` metadata exists.
-  - Why not fully connected: curriculum needs physical terrain levels. Before collision terrain exists, increasing
-    observation difficulty alone would train against mismatched physics.
-  - Needed follow-up: add episode success/failure metrics, then update terrain tile difficulty on reset.
-
-- **True OrcaLab raycaster**
-  - Current state: `RayCasterCfg` metadata exists; scans use Python heightfield sampling.
-  - Why not fully connected: a true raycaster is useful only if it hits the same imported terrain geom that the robot
-    collides with. Otherwise observation and collision can disagree.
-  - Needed follow-up: after terrain import is verified, either add/use an OrcaLab raycast API, or keep Python scanning
-    and add a debug checker comparing Python scan against OrcaLab ray hits.
-
-- **Force-thresholded non-foot contact sensor**
-  - Current state: `illegal_contact` is active through body/contact matching. `QueryContactForce` exists in OrcaGym, so
-    force data appears available by contact id.
-  - Why not fully connected: current runtime has not yet wrapped `QueryContactSimple` + `QueryContactForce` into the
-    declared `ContactSensorCfg` abstraction with named geom/body filters and thresholds.
-  - Needed follow-up: implement a contact sensor manager that maps contact ids to geom/body names, queries force by id,
-    filters `nonfoot_ground_contact`, and applies `force_threshold`.
-
-- **Pure `RemoteEnv` domain randomization**
-  - Current state: local `OrcaGymLocalEnv` randomization is implemented by writing local `mjModel` / `mjData`.
-  - Why not fully connected: pure remote mode has some setters (`SetGeomFriction`, `SetOptConfig`, actuator gain/bias),
-    but I did not find complete setters for body mass, inertia/COM, dof damping/armature, contact geom params, or direct
-    qvel push as named high-level APIs.
-  - Needed follow-up: only needed if training moves away from `OrcaGymLocalEnv`. Add remote setters or expose a guarded
-    model-edit API on the OrcaLab side.
-
-- **Damping randomization**
-  - Current state: not implemented locally.
-  - Why not fully connected: we have not yet mapped controlled joint names to MuJoCo DoF damping slots and captured a
-    reset-safe baseline.
-  - Needed follow-up: use joint `qvel_idx_start` / DoF address data to write `model.dof_damping` for controlled joints.
-
-- **Armature randomization**
-  - Current state: not implemented locally.
-  - Why not fully connected: same mapping/baseline issue as damping.
-  - Needed follow-up: capture and randomize `model.dof_armature` for controlled joint DoFs.
-
-- **Joint friction / passive loss randomization**
-  - Current state: not implemented locally.
-  - Why not fully connected: need to confirm whether G1/GO2 Orca assets use MuJoCo passive joint friction/loss fields in
-    a way that matters for these actuators.
-  - Needed follow-up: inspect compiled joint/DoF fields, then add reset-safe writes for the correct MuJoCo friction/loss
-    field.
-
-- **Richer motor delay dynamics**
-  - Current state: integer action latency is implemented.
-  - Why not fully connected: the current buffer does not model actuator bandwidth, low-pass filtering, dropped packets,
-    or per-joint latency.
-  - Needed follow-up: add optional first-order action filtering, per-joint delay, and dropout after baseline training is
-    stable.
-
-- **Full inertia tensor randomization**
-  - Current state: base inertia scale is implemented.
-  - Why not fully connected: current implementation scales only the base diagonal inertia vector; it does not randomize
-    every body or validate arbitrary physical inertia tensors.
-  - Needed follow-up: add body selection, positive-definite inertia checks, and per-body tensor scaling.
-
-- **Contact parameter coverage**
-  - Current state: matched ground/terrain geom `solref`, `solimp`, and `margin` are randomized.
-  - Why not fully connected: it does not yet cover explicit robot foot collision geoms, geom-pair overrides, or global
-    contact options.
-  - Needed follow-up: after scene geom names are stable, add foot geom matching and optional pair/material-level
-    randomization.
-
-- **Terrain visual/debug preview**
-  - Current state: OBJ export exists.
-  - Why not fully connected: there is no compact command that renders the heightfield and scan overlay for inspection.
-  - Needed follow-up: add a CLI that exports OBJ plus PNG/NumPy summaries so terrain/height-scan alignment can be checked
-    before training.
-
-## Flat/Rough Implementation Checklist
-
-- Done: flat RSL-RL VecEnv, actor/critic observations, bounded residual joint actions, PD torque control, command
-  sampling, core flat rewards, base/tilt/height/contact/time terminations, and checkpoint/W&B plumbing.
-- Done: local MuJoCo friction randomization for matched ground/terrain geoms.
-- Done: reset-safe local base mass, base inertia scale, and base COM-offset randomization.
-- Done: actuator PD gain randomization, torque-strength randomization, action latency, periodic push disturbance, local
-  solver parameter randomization, and contact parameter randomization.
-- Done: rough heightfield generation, yaw-aware height scans, reset-time observation-terrain resampling, and OBJ export.
-- Done: rough runtime rewards for `feet_air_time`, `foot_clearance`, `body_ang_vel_l2`, `stand_still`, and
-  `joint_deviation_l1`.
-- Done: body/contact based `illegal_contact` termination.
-- Pending OrcaLab permission/API: insert generated terrain into physics collision and verify imported mesh matches the
-  heightfield used by observations.
-- Pending after terrain physics: terrain curriculum progression and physical terrain tile switching.
-- Pending optional parity work: damping/armature/joint-friction randomization, richer delay dynamics, full inertia tensor
-  randomization, and a true OrcaLab raycaster backend.
-
-Train G1 with W&B logging:
-
-```bash
-python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
   --headless \
-  --logger wandb \
-  --wandb-project orca_locomotion \
-  --wandb-mode online
-```
-
-The training entrypoint always writes stable checkpoint aliases after `runner.learn()`:
-
-- `model_last.pt`
-- `model_final.pt`
-
-Training logs and checkpoints use the same layout as mjlab-style RSL-RL runs:
-
-- `logs/rsl_rl/g1_velocity/<date_time>_flat`
-- `logs/rsl_rl/g1_velocity/<date_time>_rough`
-- `logs/rsl_rl/go2_velocity/<date_time>_flat`
-- `logs/rsl_rl/go2_velocity/<date_time>_rough`
-
-The built-in G1/GO2 runner configs use the mjlab-style PPO setup: Gaussian policy distribution with scalar
-`init_std=1.0`, actor/critic hidden dims `(512, 256, 128)`, `learning_rate=1e-3`, `num_steps_per_env=24`,
-`save_interval=50`, and `max_iterations=30000`. Use `--num-iterations` to shorten a smoke test.
-
-Short multi-env smoke test:
-
-```bash
-python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
   --num-envs 2 \
   --num-iterations 1 \
-  --headless
+  --sim-backend mjwarp
 ```
 
-If OrcaGym is not listening on `localhost:50051`, override the address:
+静态检查：
 
 ```bash
-python -m orca_rl.run_train \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
-  --remote 192.168.1.10:50051 \
-  --headless
+python -m compileall orca_rl
+git diff --check
 ```
 
-Play a checkpoint:
+## 最后碰到但暂时不能解决的问题
 
-```bash
-python -m orca_rl.run_play \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
-  --ckpt logs/rsl_rl/g1_velocity/<date_time>_flat/model_<iter>.pt
+### 1. MJWarp 兼容桥收集速度慢
+
+现象：
+
+```text
+orca_cpu 小 batch 约 100 SPS
+mjwarp 兼容桥小 batch 约 45 SPS
 ```
 
-Evaluate:
+原因：
 
-```bash
-python -m orca_rl.run_eval \
-  --config orca_rl/tasks/velocity/config/g1/env_cfgs.py \
-  --ckpt logs/rsl_rl/g1_velocity/<date_time>_flat/model_<iter>.pt
+```text
+mujoco_warp.step 在 GPU 上跑
+  -> 每个 control step 同步回 CPU MjData
+  -> CPU 上跑 observation / reward / contact / reset
+```
+
+这会抵消 GPU step 的收益。CUDA graph 已经加了，但只能减少 kernel launch 开销，不能消除 CPU 同步。
+
+真正解决方案：
+
+```text
+single G1 MJCF
+  -> mujoco_warp.put_data(nworld=num_envs)
+  -> torch/warp obs
+  -> torch/warp reward
+  -> torch/warp contact
+  -> torch/warp reset
+```
+
+这相当于新增 mjlab-style backend，而不是继续 patch `OrcaGymLocalEnv`。
+
+### 2. OrcaGymLocalEnv 不是 GPU nworld API
+
+当前 `OrcaGymLocalEnv` 的 API 围绕 CPU `MjData`：
+
+```text
+query_contact_simple
+query_sensor_data
+query_site_pos_and_quat
+get_body_xpos_xmat_xquat
+set_joint_qpos
+set_joint_qvel
+update_data
+```
+
+这些都天然要求 CPU 数据。要让训练真正 GPU 化，最好在 OrcaGym 内部新增：
+
+```text
+backend="mjwarp"
+nworld=num_envs
+query_qpos_tensor
+query_qvel_tensor
+query_body_xpos_tensor
+query_sensor_tensor
+query_contact_tensor
+set_ctrl_tensor
+reset_envs
+```
+
+否则 `orca_rl` 在外面偷拿 `_mjModel/_mjData` 做 GPU step，会一直是过渡方案。
+
+### 3. 完全 mjlab 化后 policy ABI 必须严格对齐
+
+如果未来新增 `mjwarp_nworld` 后端，必须保证训练出的 policy 能放回 OrcaGym play。
+
+需要锁死：
+
+```text
+obs shape
+obs order
+obs scale
+action dim
+joint order
+actuator order
+PD mapping
+command format
+rough height_scan dim
+```
+
+否则训练能跑，但 play 时动作会错位或观测不匹配。
+
+### 4. OrcaLab scene rough terrain 还不能自动导入
+
+G1 local MJCF rough 已经是真物理 hfield。但 OrcaLab scene play 里还没有发现公开 API 可以把生成 terrain 作为 collision asset 上传/替换。
+
+需要 OrcaLab 支持其中一种：
+
+```text
+AddHeightField
+AddCollisionMesh
+ReplaceTerrain
+temporary asset import + AddActor
+supported scene XML patch/reload
+```
+
+否则 rough 训练和 OrcaStudio 可视化 terrain 不能完全一致。
+
+### 5. Terrain curriculum 没有真正接上
+
+当前有 `terrain_levels` metadata，但没有真正按成功/失败切换 terrain level。
+
+原因：
+
+```text
+local hfield 是编译进 MJCF 的
+reset 时不能随便换物理 terrain
+```
+
+可行方案：
+
+```text
+生成大 terrain grid
+每个 env reset 到不同 origin
+按成功/失败移动 origin level
+```
+
+这需要新的 terrain origin manager。
+
+### 6. GO2 rough 还不是 physical local terrain
+
+G1 有 local XML 和 hfield path。GO2 当前主要是 scene-backed resolver，rough config 有 metadata，但 physical terrain 默认关闭，避免误以为 scene 里已有同一块地形。
+
+要补 GO2，需要：
+
+```text
+GO2 local MJCF source
+GO2 local batch builder support
+GO2 rough hfield insertion
+GO2 foot/body/contact 名称对齐
+```
+
+### 7. 一些 domain randomization 还没做完
+
+已实现：
+
+```text
+friction
+base mass
+base inertia scale
+base COM offset
+kp/kd scale
+torque scale
+action latency
+push
+solver params
+contact params
+```
+
+未完整实现：
+
+```text
+damping randomization
+armature randomization
+joint friction / passive loss
+per-joint motor delay
+motor bandwidth / low-pass filter
+full inertia tensor randomization
+foot geom / pair-level contact randomization
+```
+
+### 8. Contact sensor 还不是完整 manager 抽象
+
+当前 illegal contact 能跑，但还不是完整 `ContactSensorCfg` manager。
+
+缺口：
+
+```text
+named pair filtering
+force threshold abstraction
+history buffer
+per-foot force tensor
+non-foot ground contact force tensor
+```
+
+未来 mjwarp_nworld 后端尤其需要把 contact tensor 化。
+
+### 9. 真正的 OrcaLab raycast 还没接
+
+当前 height scan 用 Python heightfield sampling。它和 local hfield 生成配置一致，所以训练可用。
+
+但如果在 OrcaLab scene play 中使用真实 terrain，最好有 OrcaLab raycast 或 MJWarp raycast 来确认：
+
+```text
+观测 height_scan
+物理 collision terrain
+可视化 terrain
+```
+
+三者一致。
+
+### 10. 训练速度最终问题不能靠当前桥彻底解决
+
+现在的问题不是单纯“把 `mj_step` 换成 `mujoco_warp.step`”。
+
+真正瓶颈是：
+
+```text
+数据结构还是 CPU Env
+obs/reward/contact 还是 numpy
+机器人并行还是 batched XML clone
+不是 nworld
+```
+
+所以最终方向必须是：
+
+```text
+保留 OrcaGym 后端用于 play/debug
+新增 mjlab-style training backend
+或者推动 OrcaGymLocalEnv 原生支持 MJWarp nworld tensor API
 ```

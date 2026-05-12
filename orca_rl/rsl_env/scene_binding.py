@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 import os
+from pathlib import Path
 import time
 
 from .local_mjcf import build_local_mjcf_batch, prepare_local_terrain_cfg, resolve_existing_xml_path
@@ -27,8 +28,11 @@ class SceneBinding:
 
 
 G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda"
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 G1_LOCAL_XML_CANDIDATES = [
     os.environ.get("ORCA_RL_G1_XML", ""),
+    _PROJECT_ROOT / "third_party" / "unitree_rl_mjlab" / "src" / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
     "/home/huan-hu/OrcaPlayground/examples/g1/g1_29dof_old.xml",
     "/home/huan-hu/下载/unitree_rl_mjlab/src/assets/robots/unitree_g1/xmls/scene_g1.xml",
 ]

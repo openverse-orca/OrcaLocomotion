@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import time
 
 from orca_rl.utils import (
@@ -18,6 +19,21 @@ ensure_project_root_on_path()
 def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
     task_cfg.setdefault("episode", {})["length_s"] = 1.0e9
     task_cfg.setdefault("observations", {})["add_noise"] = False
+    task_cfg.setdefault("randomization", {})["enabled"] = False
+    task_cfg["curriculum"] = {}
+    events = task_cfg.setdefault("events", {})
+    for event_name in (
+        "push_robot",
+        "randomize_friction",
+        "randomize_body_mass",
+        "randomize_actuator_properties",
+        "randomize_action_latency",
+        "randomize_solver_params",
+        "randomize_contact_params",
+    ):
+        events.pop(event_name, None)
+    randomization_cfg = task_cfg.setdefault("randomization", {})
+    randomization_cfg["max_action_delay_steps"] = 0
     scene_cfg = task_cfg.setdefault("scene_binding", {})
     if local_mujoco:
         return
@@ -30,6 +46,24 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
             terrain_cfg["physics_enabled"] = False
 
 
+def _apply_fixed_play_command(
+    task_cfg: dict,
+    *,
+    lin_vel_x: float | None,
+    lin_vel_y: float | None,
+    ang_vel_z: float | None,
+) -> None:
+    if lin_vel_x is None and lin_vel_y is None and ang_vel_z is None:
+        return
+    commands = task_cfg.setdefault("commands", {})
+    if lin_vel_x is not None:
+        commands["lin_vel_x"] = (float(lin_vel_x), float(lin_vel_x))
+    if lin_vel_y is not None:
+        commands["lin_vel_y"] = (float(lin_vel_y), float(lin_vel_y))
+    if ang_vel_z is not None:
+        commands["yaw_vel"] = (float(ang_vel_z), float(ang_vel_z))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Play a trained Orca locomotion RSL-RL policy.")
     parser.add_argument(
@@ -38,9 +72,35 @@ def main() -> None:
         help="Registered task name, or Python cfg file. Use file.py:factory_name for a non-default factory.",
     )
     parser.add_argument("--list-tasks", action="store_true", help="List registered task names and exit.")
-    parser.add_argument("--ckpt", default=None, help="RSL-RL checkpoint path, e.g. model_1000.pt.")
+    parser.add_argument(
+        "--mjlab",
+        action="store_true",
+        help="Shortcut for playing the latest Unitree/mjlab G1 velocity checkpoint in OrcaLab.",
+    )
+    parser.add_argument(
+        "--ckpt",
+        "--checkpoint",
+        dest="ckpt",
+        default=None,
+        help="RSL-RL checkpoint path, e.g. model_1000.pt.",
+    )
+    parser.add_argument(
+        "--policy-backend",
+        choices=("orca", "mjlab"),
+        default="orca",
+        help="`orca` loads checkpoints trained by orca_rl; `mjlab` loads Unitree/mjlab G1 checkpoints.",
+    )
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=0, help="0 means run until interrupted.")
+    parser.add_argument(
+        "--seconds",
+        type=float,
+        default=None,
+        help="Playback duration in seconds. Overrides --steps when set.",
+    )
+    parser.add_argument("--lin-vel-x", type=float, default=None, help="Fixed x velocity command for play.")
+    parser.add_argument("--lin-vel-y", type=float, default=None, help="Fixed y velocity command for play.")
+    parser.add_argument("--ang-vel-z", type=float, default=None, help="Fixed yaw velocity command for play.")
     parser.add_argument(
         "--local-mujoco",
         action="store_true",
@@ -61,7 +121,24 @@ def main() -> None:
             print(f"{spec.name}{suffix}")
         return
 
+    if args.mjlab:
+        args.policy_backend = "mjlab"
+        if args.config == "Unitree-GO2-Flat":
+            args.config = "Unitree-G1-Flat"
+        if args.lin_vel_x is None:
+            args.lin_vel_x = 0.5
+        if args.lin_vel_y is None:
+            args.lin_vel_y = 0.0
+        if args.ang_vel_z is None:
+            args.ang_vel_z = 0.0
+
     task_cfg, train_cfg = load_task_and_train_cfg(args.config)
+    _apply_fixed_play_command(
+        task_cfg,
+        lin_vel_x=args.lin_vel_x,
+        lin_vel_y=args.lin_vel_y,
+        ang_vel_z=args.ang_vel_z,
+    )
     apply_remote_override(task_cfg, args.remote)
     _apply_play_scene_mode(task_cfg, local_mujoco=bool(args.local_mujoco))
     task_cfg.setdefault("sim", {})["render_mode"] = "human"
@@ -77,9 +154,15 @@ def main() -> None:
         raise explain_missing_runtime_dependency(exc) from exc
 
     device = args.device or task_cfg.get("play", {}).get("device", "cpu")
-    checkpoint = args.ckpt or str(
-        find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)
-    )
+    if args.policy_backend == "mjlab":
+        from orca_rl.rsl_env.mjlab_policy import find_latest_unitree_mjlab_checkpoint
+
+        project_root = Path(__file__).resolve().parents[1]
+        checkpoint = str(args.ckpt or find_latest_unitree_mjlab_checkpoint(project_root))
+    else:
+        checkpoint = args.ckpt or str(
+            find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)
+        )
     try:
         env = make_locomotion_vec_env(task_cfg, device=device, render_mode="human", headless=False)
     except ImportError as exc:
@@ -93,16 +176,39 @@ def main() -> None:
             device=device,
             checkpoint=checkpoint,
         )
-        _runner, policy = load_inference_runner(env, train_cfg, checkpoint, log_dir=None, device=device)
-        obs = env.get_observations().to(device)
+        if args.policy_backend == "mjlab":
+            from orca_rl.rsl_env.mjlab_policy import MjlabG1OrcaPlayBridge, MjlabRslRlActorPolicy
+
+            policy = MjlabRslRlActorPolicy.from_checkpoint(checkpoint, device=device)
+            bridge = MjlabG1OrcaPlayBridge(env, expected_obs_dim=policy.input_dim)
+            obs = bridge.get_observations()
+            print(
+                "[orca_rl.play] Loaded Unitree/mjlab policy bridge: "
+                f"obs_dim={policy.input_dim}, action_dim={policy.output_dim}, checkpoint={checkpoint}"
+            )
+            if args.lin_vel_x is not None or args.lin_vel_y is not None or args.ang_vel_z is not None:
+                print(
+                    "[orca_rl.play] Fixed command: "
+                    f"vx={args.lin_vel_x if args.lin_vel_x is not None else 'sampled'}, "
+                    f"vy={args.lin_vel_y if args.lin_vel_y is not None else 'sampled'}, "
+                    f"wz={args.ang_vel_z if args.ang_vel_z is not None else 'sampled'}"
+                )
+        else:
+            _runner, policy = load_inference_runner(env, train_cfg, checkpoint, log_dir=None, device=device)
+            obs = env.get_observations().to(device)
         step = 0
         dt = float(task_cfg["sim"]["time_step"]) * int(task_cfg["sim"]["frame_skip"]) * int(task_cfg["sim"]["decimation"])
-        while args.steps <= 0 or step < args.steps:
+        max_steps = int(round(float(args.seconds) / dt)) if args.seconds is not None else int(args.steps)
+        while max_steps <= 0 or step < max_steps:
             start = time.perf_counter()
-            with torch.inference_mode():
-                actions = policy(obs, stochastic_output=False)
-            obs, _rewards, _dones, _extras = env.step(actions.to(env.device))
-            obs = obs.to(device)
+            if args.policy_backend == "mjlab":
+                actions_np = policy.act_numpy(obs, device=device)
+                obs = bridge.step(actions_np)
+            else:
+                with torch.inference_mode():
+                    actions = policy(obs, stochastic_output=False)
+                obs, _rewards, _dones, _extras = env.step(actions.to(env.device))
+                obs = obs.to(device)
             step += 1
             elapsed = time.perf_counter() - start
             if elapsed < dt:
