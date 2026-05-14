@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH
 from orca_rl.tasks.velocity.config_types import LocomotionEnvCfg, UniformVelocityCommandCfg
 from orca_rl.tasks.velocity.velocity_env_cfg import make_flat_velocity_env_cfg, make_rough_velocity_env_cfg
 
@@ -45,7 +46,7 @@ def _apply_g1_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> LocomotionE
         "spawn_if_missing": False,
         "max_auto_spawn_count": 1,
         "spawn_agent_name": "g1_000",
-        "asset_path": "assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda",
+        "asset_path": G1_AGENT_ASSET_PATH,
         "local_xml_path": "auto",
         "local_clone_spacing": 2.0,
     }

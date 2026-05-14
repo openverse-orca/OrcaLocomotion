@@ -27,7 +27,7 @@ class SceneBinding:
         return self.agent_names[0]
 
 
-G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/default_project/prefabs/g1_29dof_old_usda"
+G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda"
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 G1_LOCAL_XML_CANDIDATES = [

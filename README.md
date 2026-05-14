@@ -153,6 +153,12 @@ python -m orca_rl.run_play \
 third_party/unitree_rl_mjlab/logs/rsl_rl/g1_velocity/*/model_*.pt
 ```
 
+G1 scene binding / auto-publish 默认使用 OrcaLab 资产：
+
+```text
+assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda
+```
+
 本地 MuJoCo play：
 
 ```bash

@@ -12,6 +12,7 @@ from orca_rl.utils import (
     find_latest_checkpoint,
     load_task_and_train_cfg,
 )
+from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH
 
 ensure_project_root_on_path()
 
@@ -39,7 +40,7 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
         return
     if scene_cfg.get("resolver") == "g1":
         scene_cfg["local_xml_path"] = None
-        scene_cfg["asset_path"] = "assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda"
+        scene_cfg["asset_path"] = G1_AGENT_ASSET_PATH
         scene_cfg["spawn_if_missing"] = True
         scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
         terrain_cfg = task_cfg.get("terrain")
