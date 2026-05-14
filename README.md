@@ -232,6 +232,21 @@ GO2 scene binding / auto-publish 默认使用 OrcaLab 资产：
 assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda
 ```
 
+GO2 样例脚本默认走 OrcaLab play：
+
+```bash
+./play_go2_balance.sh walk
+./play_go2_balance.sh stand
+./play_go2_balance.sh spin
+```
+
+同一个脚本加 `--mjlab` 可以直接用 vendored mjlab 原生 viewer replay，用来和 OrcaLab play 对比：
+
+```bash
+./play_go2_balance.sh walk --mjlab
+./play_go2_balance.sh spin --mjlab --viewer native
+```
+
 本地 MuJoCo play：
 
 ```bash
