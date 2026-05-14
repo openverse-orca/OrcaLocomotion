@@ -59,6 +59,9 @@ class MjlabG1ActionSpec:
     kp: np.ndarray
     kd: np.ndarray
     effort_limit: np.ndarray
+    armature: np.ndarray
+    frictionloss: np.ndarray
+    joint_limits: np.ndarray
 
 
 class MjlabG1OrcaPlayBridge:
@@ -73,6 +76,7 @@ class MjlabG1OrcaPlayBridge:
                 f"(flat policy), got checkpoint input_dim={self.expected_obs_dim}."
             )
         self.action_spec = _load_unitree_mjlab_g1_action_spec(_g1_joint_names(env))
+        self.alignment_report = _align_orca_g1_runtime_to_mjlab(env, self.action_spec)
 
     def get_observations(self) -> np.ndarray:
         observations: list[np.ndarray] = []
@@ -207,15 +211,18 @@ def _step_task_with_mjlab_g1_actions(task: Any, actions: np.ndarray, spec: Mjlab
         agent.previous_action = agent.last_action.copy()
         agent.last_action = actions[index].copy()
 
-    qpos = task.data.qpos[task._leg_qpos_indices]
-    qvel = task.data.qvel[task._leg_qvel_indices]
     target_qpos = task._nominal_qpos + actions * spec.scale.reshape(1, -1)
-    target_qpos = np.clip(target_qpos, task._joint_limit_low, task._joint_limit_high)
-    torque = spec.kp.reshape(1, -1) * (target_qpos - qpos) - spec.kd.reshape(1, -1) * qvel
-    torque = np.clip(torque, -spec.effort_limit.reshape(1, -1), spec.effort_limit.reshape(1, -1))
 
     task.ctrl[:] = 0.0
-    task.ctrl[task._flat_actuator_ids] = torque.reshape(-1)
+    if getattr(task, "_mjlab_position_actuator_aligned", False):
+        task.ctrl[task._flat_actuator_ids] = target_qpos.reshape(-1)
+    else:
+        qpos = task.data.qpos[task._leg_qpos_indices]
+        qvel = task.data.qvel[task._leg_qvel_indices]
+        clipped_target = np.clip(target_qpos, task._joint_limit_low, task._joint_limit_high)
+        torque = spec.kp.reshape(1, -1) * (clipped_target - qpos) - spec.kd.reshape(1, -1) * qvel
+        torque = np.clip(torque, -spec.effort_limit.reshape(1, -1), spec.effort_limit.reshape(1, -1))
+        task.ctrl[task._flat_actuator_ids] = torque.reshape(-1)
     if task._mjwarp_runtime is not None:
         for _ in range(task.decimation):
             task._mjwarp_runtime.set_ctrl(task.ctrl)
@@ -255,6 +262,9 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
     kp = np.zeros(len(joint_names), dtype=np.float64)
     kd = np.zeros(len(joint_names), dtype=np.float64)
     effort = np.zeros(len(joint_names), dtype=np.float64)
+    armature = np.zeros(len(joint_names), dtype=np.float64)
+    frictionloss = np.zeros(len(joint_names), dtype=np.float64)
+    joint_limits = _load_mjlab_g1_joint_limits(g1_constants, joint_names)
     for joint_index, joint_name in enumerate(joint_names):
         matched = False
         for actuator_cfg in g1_constants.G1_ARTICULATION.actuators:
@@ -263,11 +273,148 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
                 kp[joint_index] = float(actuator_cfg.stiffness)
                 kd[joint_index] = float(actuator_cfg.damping)
                 effort[joint_index] = float(actuator_cfg.effort_limit)
+                armature[joint_index] = float(getattr(actuator_cfg, "armature", 0.0))
+                frictionloss[joint_index] = float(getattr(actuator_cfg, "frictionloss", 0.0))
                 matched = True
                 break
         if not matched:
             raise ValueError(f"Cannot resolve Unitree/mjlab G1 actuator config for joint: {joint_name}")
-    return MjlabG1ActionSpec(scale=scale, kp=kp, kd=kd, effort_limit=effort)
+    return MjlabG1ActionSpec(
+        scale=scale,
+        kp=kp,
+        kd=kd,
+        effort_limit=effort,
+        armature=armature,
+        frictionloss=frictionloss,
+        joint_limits=joint_limits,
+    )
+
+
+def _load_mjlab_g1_joint_limits(g1_constants: Any, joint_names: list[str]) -> np.ndarray:
+    try:
+        import mujoco
+    except ImportError as exc:
+        raise ImportError("Unitree/mjlab G1 alignment requires the mujoco Python package.") from exc
+
+    model = g1_constants.get_spec().compile()
+    limits = np.zeros((len(joint_names), 2), dtype=np.float64)
+    for index, joint_name in enumerate(joint_names):
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+        if joint_id < 0:
+            raise ValueError(f"Cannot find Unitree/mjlab G1 joint in source XML: {joint_name}")
+        limits[index] = np.asarray(model.jnt_range[joint_id], dtype=np.float64)
+    return limits
+
+
+def _align_orca_g1_runtime_to_mjlab(env: Any, spec: MjlabG1ActionSpec) -> dict[str, int]:
+    report = {
+        "tasks": 0,
+        "agents": 0,
+        "joints": 0,
+        "actuators": 0,
+        "position_actuator_tasks": 0,
+    }
+    for task in getattr(env, "tasks", []):
+        model = _task_mujoco_model(task)
+        if model is None:
+            continue
+        if getattr(task, "_mjwarp_runtime", None) is not None:
+            print(
+                "[orca_rl.play] mjlab alignment skipped for an mjwarp task; "
+                "play alignment currently targets the CPU MuJoCo model."
+            )
+            continue
+        report["tasks"] += 1
+        for agent in task.agents:
+            _align_agent_to_mjlab_position_actuators(model, task, agent, spec)
+            agent.joint_limits = spec.joint_limits.copy()
+            agent.torque_limits = np.stack([-spec.effort_limit, spec.effort_limit], axis=1)
+            report["agents"] += 1
+            report["joints"] += len(agent.leg_joint_names)
+            report["actuators"] += len(agent.actuator_names)
+        task._joint_limit_low = np.broadcast_to(spec.joint_limits[:, 0], task._joint_limit_low.shape).copy()
+        task._joint_limit_high = np.broadcast_to(spec.joint_limits[:, 1], task._joint_limit_high.shape).copy()
+        task._torque_low = np.broadcast_to(-spec.effort_limit, task._torque_low.shape).copy()
+        task._torque_high = np.broadcast_to(spec.effort_limit, task._torque_high.shape).copy()
+        task._mjlab_position_actuator_aligned = True
+        report["position_actuator_tasks"] += 1
+        task.mj_forward()
+        task.update_data()
+    return report
+
+
+def _align_agent_to_mjlab_position_actuators(
+    model: Any,
+    task: Any,
+    agent: Any,
+    spec: MjlabG1ActionSpec,
+) -> None:
+    import mujoco
+
+    joint_dict = task.model.get_joint_dict()
+    actuator_dict = task.model.get_actuator_dict()
+    for joint_index, (joint_name, actuator_name) in enumerate(zip(agent.leg_joint_names, agent.actuator_names)):
+        joint_id = int(joint_dict[joint_name]["JointId"])
+        actuator_id = int(actuator_dict[actuator_name]["ActuatorId"])
+        qvel_offset = int(agent.leg_qvel_indices[joint_index])
+        low, high = spec.joint_limits[joint_index]
+        kp = float(spec.kp[joint_index])
+        kd = float(spec.kd[joint_index])
+        effort = float(spec.effort_limit[joint_index])
+
+        model.jnt_range[joint_id] = (low, high)
+        model.jnt_limited[joint_id] = True
+        model.dof_armature[qvel_offset] = float(spec.armature[joint_index])
+        model.dof_damping[qvel_offset] = 0.0
+        model.dof_frictionloss[qvel_offset] = float(spec.frictionloss[joint_index])
+
+        model.actuator_dyntype[actuator_id] = int(mujoco.mjtDyn.mjDYN_NONE)
+        model.actuator_gaintype[actuator_id] = int(mujoco.mjtGain.mjGAIN_FIXED)
+        model.actuator_biastype[actuator_id] = int(mujoco.mjtBias.mjBIAS_AFFINE)
+        model.actuator_gainprm[actuator_id, :] = 0.0
+        model.actuator_biasprm[actuator_id, :] = 0.0
+        model.actuator_gainprm[actuator_id, 0] = kp
+        model.actuator_biasprm[actuator_id, 1] = -kp
+        model.actuator_biasprm[actuator_id, 2] = -kd
+        model.actuator_forcelimited[actuator_id] = True
+        model.actuator_forcerange[actuator_id] = (-effort, effort)
+        model.actuator_ctrllimited[actuator_id] = False
+        model.actuator_actlimited[actuator_id] = False
+        delta = effort / kp if kp > 0.0 else effort
+        model.actuator_ctrlrange[actuator_id] = (low - delta, high + delta)
+
+        _update_orca_model_dicts(task, joint_name, actuator_name, joint_id, actuator_id, low, high)
+
+
+def _update_orca_model_dicts(
+    task: Any,
+    joint_name: str,
+    actuator_name: str,
+    joint_id: int,
+    actuator_id: int,
+    joint_low: float,
+    joint_high: float,
+) -> None:
+    joint_dict = task.model.get_joint_dict()
+    actuator_dict = task.model.get_actuator_dict()
+    if joint_name in joint_dict:
+        joint_dict[joint_name]["JointId"] = joint_id
+        joint_dict[joint_name]["Range"] = np.array([joint_low, joint_high], dtype=np.float64)
+    if actuator_name in actuator_dict:
+        model = _task_mujoco_model(task)
+        if model is not None:
+            actuator_dict[actuator_name]["ActuatorId"] = actuator_id
+            actuator_dict[actuator_name]["CtrlLimited"] = False
+            actuator_dict[actuator_name]["ForceLimited"] = True
+            actuator_dict[actuator_name]["CtrlRange"] = model.actuator_ctrlrange[actuator_id].copy()
+            actuator_dict[actuator_name]["ForceRange"] = model.actuator_forcerange[actuator_id].copy()
+            actuator_dict[actuator_name]["GainPrm"] = model.actuator_gainprm[actuator_id].copy()
+            actuator_dict[actuator_name]["BiasPrm"] = model.actuator_biasprm[actuator_id].copy()
+
+
+def _task_mujoco_model(task: Any) -> Any | None:
+    gym = getattr(task, "gym", None)
+    return getattr(gym, "_mjModel", None)
 
 
 def _resolve_regex_values(pattern_values: dict[str, float], names: list[str]) -> np.ndarray:

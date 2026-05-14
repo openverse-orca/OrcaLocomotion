@@ -39,6 +39,7 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
         return
     if scene_cfg.get("resolver") == "g1":
         scene_cfg["local_xml_path"] = None
+        scene_cfg["asset_path"] = "assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda"
         scene_cfg["spawn_if_missing"] = True
         scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
         terrain_cfg = task_cfg.get("terrain")
@@ -182,9 +183,16 @@ def main() -> None:
             policy = MjlabRslRlActorPolicy.from_checkpoint(checkpoint, device=device)
             bridge = MjlabG1OrcaPlayBridge(env, expected_obs_dim=policy.input_dim)
             obs = bridge.get_observations()
+            alignment = bridge.alignment_report
             print(
                 "[orca_rl.play] Loaded Unitree/mjlab policy bridge: "
                 f"obs_dim={policy.input_dim}, action_dim={policy.output_dim}, checkpoint={checkpoint}"
+            )
+            print(
+                "[orca_rl.play] Mjlab runtime alignment: "
+                f"tasks={alignment['tasks']}, agents={alignment['agents']}, "
+                f"joints={alignment['joints']}, actuators={alignment['actuators']}, "
+                f"position_actuator_tasks={alignment['position_actuator_tasks']}"
             )
             if args.lin_vel_x is not None or args.lin_vel_y is not None or args.ang_vel_z is not None:
                 print(
