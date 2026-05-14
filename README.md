@@ -8,6 +8,7 @@ Orca RL 是一个把 RSL-RL 接入 OrcaLab / OrcaGym / MuJoCo 生态的训练与
 - Unitree GO2 flat / rough 配置骨架
 - RSL-RL `OnPolicyRunner` 训练入口
 - 本地 MuJoCo headless training
+- `--headless` / `--no-render` 无渲染训练模式
 - G1 batched local MJCF 训练
 - G1 rough physical hfield terrain
 - 实验性 `mujoco_warp` step backend
@@ -80,12 +81,21 @@ Unitree-GO2-Flat
 Unitree-GO2-Rough
 ```
 
-训练 G1 flat：
+训练 G1 flat。训练默认就是 headless，显式写 `--headless` 或 `--no-render` 是为了避免误开 viewer：
 
 ```bash
 python -m orca_rl.run_train \
   --config Unitree-G1-Flat \
   --headless \
+  --num-envs 24
+```
+
+等价写法：
+
+```bash
+python -m orca_rl.run_train \
+  --config Unitree-G1-Flat \
+  --no-render \
   --num-envs 24
 ```
 
@@ -106,6 +116,15 @@ python -m orca_rl.run_train \
   --headless \
   --num-envs 24 \
   --sim-backend mjwarp
+```
+
+短程可视化 debug 训练：
+
+```bash
+python -m orca_rl.run_train \
+  --config Unitree-G1-Flat \
+  --render \
+  --num-envs 1
 ```
 
 OrcaLab scene 中播放 Orca RL checkpoint：
@@ -143,6 +162,8 @@ python -m orca_rl.run_play \
   --local-mujoco
 ```
 
+`run_play` 默认保留 human rendering，用于看策略动作；`--local-mujoco` 只作为不接 OrcaLab scene 的调试路径。
+
 评估 checkpoint：
 
 ```bash
@@ -159,6 +180,45 @@ python -m orca_rl.terrains.export \
   --config Unitree-G1-Rough \
   --out generated_terrains/g1_rough.obj
 ```
+
+## Headless / No-Rendering 训练
+
+这部分原来记录在 `TODO_headless_rendering.md`，现在已经合并到主 README。
+
+训练入口支持：
+
+```text
+--headless
+--no-render
+```
+
+它们会把配置写成：
+
+```text
+sim.headless = True
+sim.render_mode = "none"
+```
+
+并沿着下面的路径传入后端：
+
+```text
+run_train
+  -> make_locomotion_vec_env(...)
+  -> OrcaRslRlVecEnv
+  -> BatchedOrcaLocomotionTask
+  -> OrcaGymLocalEnv / MuJoCo backend
+```
+
+headless 模式的目标是训练热路径里不打开 viewer、不渲染 camera frame、不做 frame display，也不把大批量机器人发布到 OrcaLab 交互场景里。G1 headless 训练默认使用 generated local MJCF batch，因此可以不依赖 OrcaLab viewport、不依赖 gRPC server，也不会因为场景里存在大量可视化 actor 而拖慢训练。
+
+play/debug 则反过来：`run_play` 默认使用 human rendering，并优先走 OrcaLab scene binding。G1 play 会禁用 local MJCF 路径，使用 scene binding resolver；如果场景里没有 G1，会尝试自动发布配置里的 G1 asset，`--local-mujoco` 则保留为完全不接 OrcaLab scene 的调试路径。这样训练和播放分工清楚：
+
+```text
+train: headless local MuJoCo, 追求吞吐
+play: OrcaLab scene / human render, 追求可视化检查
+```
+
+G1 rough local MJCF 训练还会把 rough heightfield 插入 MuJoCo，作为真实 `hfield` collision geom，而不是只在 reward 里使用高度采样。
 
 ## 后端
 
@@ -435,7 +495,6 @@ group="0"
 orca_rl/
 ├── README.md
 ├── RSL_RL_RESTRUCTURE_REPORT.md
-├── TODO_headless_rendering.md
 ├── pyproject.toml
 ├── requirements.txt
 ├── third_party/
@@ -551,7 +610,6 @@ orca_rl/
 - `sensor/config.py`: contact / sensor config dataclass。
 - `managers/__init__.py`: manager-style 结构占位。
 - `RSL_RL_RESTRUCTURE_REPORT.md`: 早期 RSL-RL 接入 OrcaLab 的重构记录。
-- `TODO_headless_rendering.md`: headless / no-rendering 改造记录。
 
 ## 验证命令
 
