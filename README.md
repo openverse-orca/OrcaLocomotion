@@ -190,7 +190,7 @@ OrcaLab scene 中播放 Unitree/mjlab G1 checkpoint：
 python -m orca_rl.run_play \
   --config Unitree-G1-Flat \
   --policy-backend mjlab \
-  --checkpoint /home/huan-hu/orca_rl/test_model_G1_mjlab_Flat.pt \
+  --checkpoint ./test_model_G1_mjlab_Flat.pt \
   --lin-vel-x 0.5 \
   --lin-vel-y 0.0 \
   --ang-vel-z 0.0
@@ -214,7 +214,7 @@ OrcaLab scene 中播放 Unitree/mjlab GO2 checkpoint：
 python -m orca_rl.run_play \
   --config Unitree-GO2-Flat \
   --policy-backend mjlab \
-  --checkpoint <path_to_go2_model.pt> \
+  --checkpoint ./test_model_Go2_mjlab_Flat.pt \
   --lin-vel-x 0.5 \
   --lin-vel-y 0.0 \
   --ang-vel-z 0.0
