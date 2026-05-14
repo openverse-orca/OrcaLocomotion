@@ -133,7 +133,6 @@ from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
 from mjlab.tasks.registry import load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
-from src.tasks.velocity.mdp import UniformVelocityCommandCfg
 
 
 def resolve_viewer(viewer: str) -> str:
@@ -157,7 +156,6 @@ agent_cfg = load_rl_cfg(task_id)
 env_cfg.scene.num_envs = 1
 
 twist_cmd = env_cfg.commands["twist"]
-assert isinstance(twist_cmd, UniformVelocityCommandCfg)
 twist_cmd.resampling_time_range = (1.0e9, 1.0e9)
 twist_cmd.heading_command = False
 twist_cmd.rel_heading_envs = 0.0
