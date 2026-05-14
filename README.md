@@ -579,8 +579,9 @@ last_action
 3. 使用 mjlab action scale
 4. 将 OrcaLab runtime joint range / armature / damping / frictionloss 对齐到 mjlab 训练配置
 5. 将 OrcaLab runtime motor 改成 mjlab 风格的 MuJoCo position actuator 语义
-6. play step 写入 target joint position
-7. 让 MuJoCo 根据 stiffness / damping / force limit 产生控制力
+6. 优先使用 runtime IMU gyro sensor 构造 body-frame base angular velocity
+7. play step 写入 target joint position
+8. 让 MuJoCo 根据 stiffness / damping / force limit 产生控制力
 ```
 
 启动后应看到类似日志：
@@ -599,6 +600,29 @@ calf = -1.8
 ```
 
 这一步很重要，因为 GO2 policy 的 `joint_pos_rel` 和 `action -> target_qpos` 都以 mjlab default pose 为零点。
+
+GO2 bridge 还会做额外的 OrcaLab runtime 对齐：
+
+```text
+base reset height = 0.32
+reset xy/yaw/joint noise = 0
+foot sphere contact condim = 3
+foot sphere friction = [0.6, 0.02, 0.01]
+foot sphere solimp = [0.9, 0.95, 0.023, ...]
+non-foot robot collision condim = 1
+non-foot robot collision conaffinity = 0
+```
+
+GO2 原地转向时尤其依赖正确的角速度观测。Unitree/mjlab deploy 使用 IMU gyro 作为 body-frame angular velocity；OrcaLab play bridge 现在优先读取 runtime XML 中的 `*_imu_gyro` sensor，而不是从 freejoint `qvel[3:6]` 再猜坐标系。
+
+GO2 mjlab play 时应额外看到：
+
+```text
+[orca_rl.play] GO2 mjlab contact alignment: contact_geoms=23, foot_contact_geoms=4, nonfoot_contact_geoms=19, base_height_resets=1, imu_gyro_sensors=1
+```
+
+如果 `foot_contact_geoms=0`，说明当前 OrcaLab 下发的 GO2 资产脚底 geom 结构和已知 `go2_usda` 不同，需要重新抓 runtime XML。
+如果 `imu_gyro_sensors=0`，说明 runtime XML 没有暴露 `*_imu_gyro` sensor，play bridge 会退回到 qvel 推导的角速度，原地旋转策略更容易出现慢性漂移。
 
 ## mjlab G1 / GO2 到 OrcaLab Play 的对齐
 
@@ -623,6 +647,18 @@ model.jnt_limited[joint_id] = True
 model.dof_armature[dof_id] = mjlab_armature
 model.dof_damping[dof_id] = 0.0
 model.dof_frictionloss[dof_id] = mjlab_frictionloss
+```
+
+GO2 额外 patch contact / reset / IMU 读取：
+
+```text
+model.geom_condim[foot_geom_id] = 3
+model.geom_friction[foot_geom_id] = [0.6, 0.02, 0.01]
+model.geom_solimp[foot_geom_id][:3] = [0.9, 0.95, 0.023]
+model.geom_condim[nonfoot_robot_geom_id] = 1
+model.geom_conaffinity[robot_geom_id] = 0
+task.cfg["reset"]["base_height"] = 0.32
+base_ang_vel_body = query_sensor_data("*_imu_gyro")
 ```
 
 执行器从原始 motor 语义改成 position actuator 语义：
@@ -948,9 +984,18 @@ FollowActor
 
 或者在 OrcaLab viewer UI 内部加 `Follow Robot` toggle。
 
-### 5. mjlab checkpoint 在 OrcaLab play 仍可能受 contact model 影响
+### 5. mjlab checkpoint 在 OrcaLab play 仍可能受完整物理模型差异影响
 
-runtime patch 已对齐 joint / actuator controller，但 OrcaLab runtime 的 collision geom 仍和 mjlab 训练环境不同。OrcaLab runtime 中很多 mesh/sphere/cylinder geom 直接参与 collision，mjlab 则是 visual mesh + simplified capsule/sphere collision。
+runtime patch 已对齐 joint / actuator controller，并对 GO2 的脚底 sphere contact、reset height、IMU gyro 观测做了 mjlab 风格对齐。但 OrcaLab runtime 的完整 collision geom、body mass、inertia、mesh/cylinder/sphere 组合仍可能和 mjlab 训练 XML 不完全一致。OrcaLab runtime 中很多 mesh/sphere/cylinder geom 直接参与 collision，mjlab 则是 visual mesh + simplified collision。
+
+GO2 play 的健康启动日志应包含：
+
+```text
+foot_contact_geoms=4
+imu_gyro_sensors=1
+```
+
+如果这两个都正常但策略仍摔倒，下一步应继续对比 body mass / inertia、foot geom size / pose、command sign、以及 joint/action order。
 
 ### 6. Terrain curriculum 还没有真正接上
 

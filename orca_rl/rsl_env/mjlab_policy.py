@@ -13,6 +13,9 @@ from .math_utils import quat_wxyz_to_rotmat
 
 
 _GRAVITY_W = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+_GO2_MJLAB_BASE_HEIGHT = 0.32
+_GO2_MJLAB_FOOT_FRICTION = np.array([0.6, 0.02, 0.01], dtype=np.float64)
+_GO2_MJLAB_FOOT_SOLIMP_HEAD = np.array([0.9, 0.95, 0.023], dtype=np.float64)
 
 
 class MjlabRslRlActorPolicy(nn.Module):
@@ -96,6 +99,7 @@ class MjlabG1OrcaPlayBridge:
             foot_positions = task._query_all_foot_positions()
             contact_state = task._query_batched_contacts()
             for index in range(task.num_envs):
+                agent = task.agents[index]
                 state = task._read_state(
                     index,
                     update_air_time=False,
@@ -105,6 +109,7 @@ class MjlabG1OrcaPlayBridge:
                 observations.append(
                     _build_mjlab_g1_actor_obs(
                         state=state,
+                        base_ang_vel_body=_read_mjlab_imu_gyro(task, agent, index),
                         nominal_qpos=task._nominal_qpos[index],
                         episode_length=int(task.episode_lengths[index]),
                         step_dt=float(task.control_dt),
@@ -148,6 +153,7 @@ class MjlabGo2OrcaPlayBridge:
             foot_positions = task._query_all_foot_positions()
             contact_state = task._query_batched_contacts()
             for index in range(task.num_envs):
+                agent = task.agents[index]
                 state = task._read_state(
                     index,
                     update_air_time=False,
@@ -157,6 +163,7 @@ class MjlabGo2OrcaPlayBridge:
                 observations.append(
                     _build_mjlab_go2_actor_obs(
                         state=state,
+                        base_ang_vel_body=_read_mjlab_imu_gyro(task, agent, index),
                         default_qpos=self.action_spec.default_qpos,
                         episode_length=int(task.episode_lengths[index]),
                         step_dt=float(task.control_dt),
@@ -231,13 +238,17 @@ def _last_mlp_weight_key(actor_state_dict: dict[str, torch.Tensor]) -> str:
 def _build_mjlab_g1_actor_obs(
     *,
     state: Any,
+    base_ang_vel_body: np.ndarray | None = None,
     nominal_qpos: np.ndarray,
     episode_length: int,
     step_dt: float,
     expected_dim: int,
 ) -> np.ndarray:
     rot = quat_wxyz_to_rotmat(state.base_quat)
-    base_ang_vel_body = rot.T @ state.base_ang_vel_world
+    if base_ang_vel_body is None:
+        base_ang_vel_body = rot.T @ state.base_ang_vel_world
+    else:
+        base_ang_vel_body = np.asarray(base_ang_vel_body, dtype=np.float64).reshape(3)
     projected_gravity = rot.T @ _GRAVITY_W
     phase = _mjlab_phase(
         episode_length=episode_length,
@@ -270,13 +281,17 @@ def _build_mjlab_g1_actor_obs(
 def _build_mjlab_go2_actor_obs(
     *,
     state: Any,
+    base_ang_vel_body: np.ndarray | None = None,
     default_qpos: np.ndarray,
     episode_length: int,
     step_dt: float,
     expected_dim: int,
 ) -> np.ndarray:
     rot = quat_wxyz_to_rotmat(state.base_quat)
-    base_ang_vel_body = rot.T @ state.base_ang_vel_world
+    if base_ang_vel_body is None:
+        base_ang_vel_body = rot.T @ state.base_ang_vel_world
+    else:
+        base_ang_vel_body = np.asarray(base_ang_vel_body, dtype=np.float64).reshape(3)
     projected_gravity = rot.T @ _GRAVITY_W
     phase = _mjlab_phase(
         episode_length=episode_length,
@@ -315,6 +330,52 @@ def _mjlab_phase(*, episode_length: int, step_dt: float, period: float, command:
     if np.linalg.norm(command) < 0.1:
         phase[:] = 0.0
     return phase
+
+
+def _read_mjlab_imu_gyro(task: Any, agent: Any, agent_index: int) -> np.ndarray | None:
+    if not hasattr(task, "query_sensor_data"):
+        return None
+    candidates = []
+    if hasattr(task, "sensor"):
+        try:
+            candidates.append(task.sensor("imu_gyro", agent_index))
+        except Exception:
+            pass
+    candidates.extend(
+        [
+            f"{agent.agent_name}_imu_gyro",
+            f"{agent.agent_name}/imu_gyro",
+            "imu_gyro",
+        ]
+    )
+    sensor_dict = getattr(task.model, "_sensor_dict", {})
+    for sensor_name in dict.fromkeys(candidates):
+        if sensor_dict and sensor_name not in sensor_dict:
+            continue
+        try:
+            sensor_data = task.query_sensor_data([sensor_name])
+            gyro = np.asarray(sensor_data[sensor_name], dtype=np.float64).reshape(-1)
+        except Exception:
+            continue
+        if gyro.size >= 3:
+            return gyro[:3].copy()
+    return None
+
+
+def _count_mjlab_imu_gyro_sensors(task: Any) -> int:
+    sensor_dict = getattr(task.model, "_sensor_dict", {})
+    count = 0
+    for index, agent in enumerate(getattr(task, "agents", [])):
+        candidates = []
+        if hasattr(task, "sensor"):
+            try:
+                candidates.append(task.sensor("imu_gyro", index))
+            except Exception:
+                pass
+        candidates.append(f"{agent.agent_name}_imu_gyro")
+        if any(sensor_name in sensor_dict for sensor_name in candidates):
+            count += 1
+    return count
 
 
 def _step_task_with_mjlab_g1_actions(task: Any, actions: np.ndarray, spec: MjlabG1ActionSpec) -> None:
@@ -592,6 +653,11 @@ def _align_orca_go2_runtime_to_mjlab(env: Any, spec: MjlabGo2ActionSpec) -> dict
         "joints": 0,
         "actuators": 0,
         "position_actuator_tasks": 0,
+        "contact_geoms": 0,
+        "foot_contact_geoms": 0,
+        "nonfoot_contact_geoms": 0,
+        "base_height_resets": 0,
+        "imu_gyro_sensors": 0,
     }
     for task in getattr(env, "tasks", []):
         model = _task_mujoco_model(task)
@@ -604,6 +670,10 @@ def _align_orca_go2_runtime_to_mjlab(env: Any, spec: MjlabGo2ActionSpec) -> dict
             )
             continue
         report["tasks"] += 1
+        contact_report = _align_go2_contact_model_to_mjlab(model, task)
+        for key, value in contact_report.items():
+            report[key] += value
+        report["imu_gyro_sensors"] += _count_mjlab_imu_gyro_sensors(task)
         for agent in task.agents:
             _align_agent_to_mjlab_position_actuators(model, task, agent, spec)
             agent.joint_limits = spec.joint_limits.copy()
@@ -619,6 +689,7 @@ def _align_orca_go2_runtime_to_mjlab(env: Any, spec: MjlabGo2ActionSpec) -> dict
         task._torque_high = np.broadcast_to(spec.effort_limit, task._torque_high.shape).copy()
         task._mjlab_position_actuator_aligned = True
         report["position_actuator_tasks"] += 1
+        report["base_height_resets"] += _align_go2_base_height_to_mjlab(task)
         task.mj_forward()
         task.update_data()
     return report
@@ -665,6 +736,92 @@ def _align_agent_to_mjlab_position_actuators(
         model.actuator_ctrlrange[actuator_id] = (low - delta, high + delta)
 
         _update_orca_model_dicts(task, joint_name, actuator_name, joint_id, actuator_id, low, high)
+
+
+def _align_go2_contact_model_to_mjlab(model: Any, task: Any) -> dict[str, int]:
+    import mujoco
+
+    report = {
+        "contact_geoms": 0,
+        "foot_contact_geoms": 0,
+        "nonfoot_contact_geoms": 0,
+    }
+    foot_body_names = {body for agent in task.agents for body in agent.foot_body_names}
+    robot_body_names = {body for agent in task.agents for body in agent.robot_body_names}
+    agent_prefixes = tuple(f"{agent.agent_name}_" for agent in task.agents)
+    sphere_type = int(mujoco.mjtGeom.mjGEOM_SPHERE)
+
+    for geom_id in range(int(model.ngeom)):
+        body_id = int(model.geom_bodyid[geom_id])
+        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id) or ""
+        if body_name not in robot_body_names and not body_name.startswith(agent_prefixes):
+            continue
+        if int(model.geom_contype[geom_id]) == 0 and int(model.geom_conaffinity[geom_id]) == 0:
+            continue
+
+        report["contact_geoms"] += 1
+        model.geom_contype[geom_id] = 1
+        model.geom_conaffinity[geom_id] = 0
+
+        if _is_go2_runtime_foot_geom(model, geom_id, body_name, foot_body_names, sphere_type):
+            model.geom_condim[geom_id] = 3
+            model.geom_priority[geom_id] = max(int(model.geom_priority[geom_id]), 1)
+            model.geom_friction[geom_id, : _GO2_MJLAB_FOOT_FRICTION.size] = _GO2_MJLAB_FOOT_FRICTION
+            solimp = np.asarray(model.geom_solimp[geom_id], dtype=np.float64).copy()
+            solimp[: _GO2_MJLAB_FOOT_SOLIMP_HEAD.size] = _GO2_MJLAB_FOOT_SOLIMP_HEAD
+            model.geom_solimp[geom_id] = solimp
+            report["foot_contact_geoms"] += 1
+        else:
+            model.geom_condim[geom_id] = 1
+            report["nonfoot_contact_geoms"] += 1
+
+    return report
+
+
+def _is_go2_runtime_foot_geom(
+    model: Any,
+    geom_id: int,
+    body_name: str,
+    foot_body_names: set[str],
+    sphere_type: int,
+) -> bool:
+    if body_name not in foot_body_names:
+        return False
+    if int(model.geom_type[geom_id]) != sphere_type:
+        return False
+    radius = float(model.geom_size[geom_id, 0])
+    local_z = float(model.geom_pos[geom_id, 2])
+    return 0.015 <= radius <= 0.035 and local_z < -0.15
+
+
+def _align_go2_base_height_to_mjlab(task: Any) -> int:
+    reset_cfg = task.cfg.setdefault("reset", {})
+    reset_cfg["base_height"] = _GO2_MJLAB_BASE_HEIGHT
+    reset_cfg["xy_noise"] = 0.0
+    reset_cfg["yaw_noise"] = 0.0
+    reset_cfg["joint_noise"] = 0.0
+
+    joint_qpos: dict[str, np.ndarray] = {}
+    joint_qvel: dict[str, np.ndarray] = {}
+    changed = 0
+    for agent in task.agents:
+        base_qpos = np.asarray(
+            task.data.qpos[agent.base_qpos_offset : agent.base_qpos_offset + 7],
+            dtype=np.float64,
+        ).copy()
+        if base_qpos.size != 7:
+            continue
+        if abs(float(base_qpos[2]) - _GO2_MJLAB_BASE_HEIGHT) > 1e-9:
+            changed += 1
+        base_qpos[2] = _GO2_MJLAB_BASE_HEIGHT
+        agent.initial_base_qpos[2] = _GO2_MJLAB_BASE_HEIGHT
+        joint_qpos[agent.base_joint_name] = base_qpos
+        joint_qvel[agent.base_joint_name] = np.zeros(6, dtype=np.float64)
+
+    if joint_qpos:
+        task.set_joint_qpos(joint_qpos)
+        task.set_joint_qvel(joint_qvel)
+    return changed
 
 
 def _update_orca_model_dicts(

@@ -205,6 +205,15 @@ def main() -> None:
                 f"joints={alignment['joints']}, actuators={alignment['actuators']}, "
                 f"position_actuator_tasks={alignment['position_actuator_tasks']}"
             )
+            if "foot_contact_geoms" in alignment:
+                print(
+                    "[orca_rl.play] GO2 mjlab contact alignment: "
+                    f"contact_geoms={alignment.get('contact_geoms', 0)}, "
+                    f"foot_contact_geoms={alignment.get('foot_contact_geoms', 0)}, "
+                    f"nonfoot_contact_geoms={alignment.get('nonfoot_contact_geoms', 0)}, "
+                    f"base_height_resets={alignment.get('base_height_resets', 0)}, "
+                    f"imu_gyro_sensors={alignment.get('imu_gyro_sensors', 0)}"
+                )
             if args.lin_vel_x is not None or args.lin_vel_y is not None or args.ang_vel_z is not None:
                 print(
                     "[orca_rl.play] Fixed command: "
