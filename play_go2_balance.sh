@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CHECKPOINT="${ROOT_DIR}/test_model_Go2_mjlab_Flat.pt"
+CHECKPOINT="${ROOT_DIR}/checkpoints/test_model_Go2_mjlab_Flat.pt"
 BACKEND="orcalab"
 VIEWER="auto"
 
@@ -88,7 +88,7 @@ Examples:
   ./play_go2_balance.sh stand --mjlab --viewer viser
 
 Checkpoint:
-  ./test_model_Go2_mjlab_Flat.pt
+  ./checkpoints/test_model_Go2_mjlab_Flat.pt
 EOF
     exit 0
     ;;

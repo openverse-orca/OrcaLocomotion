@@ -70,8 +70,8 @@ OrcaGymLocalEnv loads local MuJoCo model
 本仓库包含两个用于 OrcaLab play smoke 的 mjlab checkpoint，使用 Git LFS 存储：
 
 ```text
-test_model_G1_mjlab_Flat.pt
-test_model_Go2_mjlab_Flat.pt
+checkpoints/test_model_G1_mjlab_Flat.pt
+checkpoints/test_model_Go2_mjlab_Flat.pt
 ```
 
 首次 clone 前建议先安装 Git LFS：
@@ -190,7 +190,7 @@ OrcaLab scene 中播放 Unitree/mjlab G1 checkpoint：
 python -m orca_rl.run_play \
   --config Unitree-G1-Flat \
   --policy-backend mjlab \
-  --checkpoint ./test_model_G1_mjlab_Flat.pt \
+  --checkpoint ./checkpoints/test_model_G1_mjlab_Flat.pt \
   --lin-vel-x 0.5 \
   --lin-vel-y 0.0 \
   --ang-vel-z 0.0
@@ -214,7 +214,7 @@ OrcaLab scene 中播放 Unitree/mjlab GO2 checkpoint：
 python -m orca_rl.run_play \
   --config Unitree-GO2-Flat \
   --policy-backend mjlab \
-  --checkpoint ./test_model_Go2_mjlab_Flat.pt \
+  --checkpoint ./checkpoints/test_model_Go2_mjlab_Flat.pt \
   --lin-vel-x 0.5 \
   --lin-vel-y 0.0 \
   --ang-vel-z 0.0
