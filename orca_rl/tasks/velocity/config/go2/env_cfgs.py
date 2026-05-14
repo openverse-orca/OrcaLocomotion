@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from orca_rl.rsl_env.scene_binding import GO2_AGENT_ASSET_PATH
 from orca_rl.tasks.velocity.config_types import LocomotionEnvCfg, UniformVelocityCommandCfg
 from orca_rl.tasks.velocity.velocity_env_cfg import make_flat_velocity_env_cfg, make_rough_velocity_env_cfg
 
@@ -27,6 +28,10 @@ def _apply_go2_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> Locomotion
         "resolver": "go2",
         "min_count": 1,
         "max_count": 1,
+        "spawn_if_missing": False,
+        "max_auto_spawn_count": 1,
+        "spawn_agent_name": "go2_000",
+        "asset_path": GO2_AGENT_ASSET_PATH,
     }
     if cfg.terrain is not None:
         cfg.terrain = replace(cfg.terrain, physics_enabled=False)

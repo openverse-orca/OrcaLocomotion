@@ -12,7 +12,7 @@ from orca_rl.utils import (
     find_latest_checkpoint,
     load_task_and_train_cfg,
 )
-from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH
+from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH, GO2_AGENT_ASSET_PATH
 
 ensure_project_root_on_path()
 
@@ -41,6 +41,13 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
     if scene_cfg.get("resolver") == "g1":
         scene_cfg["local_xml_path"] = None
         scene_cfg["asset_path"] = G1_AGENT_ASSET_PATH
+        scene_cfg["spawn_if_missing"] = True
+        scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
+        terrain_cfg = task_cfg.get("terrain")
+        if isinstance(terrain_cfg, dict):
+            terrain_cfg["physics_enabled"] = False
+    elif scene_cfg.get("resolver") == "go2":
+        scene_cfg["asset_path"] = GO2_AGENT_ASSET_PATH
         scene_cfg["spawn_if_missing"] = True
         scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
         terrain_cfg = task_cfg.get("terrain")
@@ -77,12 +84,10 @@ def main() -> None:
     parser.add_argument(
         "--mjlab",
         action="store_true",
-        help="Shortcut for playing the latest Unitree/mjlab G1 velocity checkpoint in OrcaLab.",
+        help="Shortcut for playing the latest Unitree/mjlab velocity checkpoint for the selected config.",
     )
     parser.add_argument(
-        "--ckpt",
         "--checkpoint",
-        dest="ckpt",
         default=None,
         help="RSL-RL checkpoint path, e.g. model_1000.pt.",
     )
@@ -90,7 +95,7 @@ def main() -> None:
         "--policy-backend",
         choices=("orca", "mjlab"),
         default="orca",
-        help="`orca` loads checkpoints trained by orca_rl; `mjlab` loads Unitree/mjlab G1 checkpoints.",
+        help="`orca` loads checkpoints trained by orca_rl; `mjlab` loads Unitree/mjlab velocity checkpoints.",
     )
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=0, help="0 means run until interrupted.")
@@ -125,8 +130,6 @@ def main() -> None:
 
     if args.mjlab:
         args.policy_backend = "mjlab"
-        if args.config == "Unitree-GO2-Flat":
-            args.config = "Unitree-G1-Flat"
         if args.lin_vel_x is None:
             args.lin_vel_x = 0.5
         if args.lin_vel_y is None:
@@ -156,13 +159,14 @@ def main() -> None:
         raise explain_missing_runtime_dependency(exc) from exc
 
     device = args.device or task_cfg.get("play", {}).get("device", "cpu")
+    robot_name = str(task_cfg.get("robot", "")).strip().lower()
     if args.policy_backend == "mjlab":
         from orca_rl.rsl_env.mjlab_policy import find_latest_unitree_mjlab_checkpoint
 
         project_root = Path(__file__).resolve().parents[1]
-        checkpoint = str(args.ckpt or find_latest_unitree_mjlab_checkpoint(project_root))
+        checkpoint = str(args.checkpoint or find_latest_unitree_mjlab_checkpoint(project_root, robot=robot_name or "g1"))
     else:
-        checkpoint = args.ckpt or str(
+        checkpoint = args.checkpoint or str(
             find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)
         )
     try:
@@ -179,10 +183,16 @@ def main() -> None:
             checkpoint=checkpoint,
         )
         if args.policy_backend == "mjlab":
-            from orca_rl.rsl_env.mjlab_policy import MjlabG1OrcaPlayBridge, MjlabRslRlActorPolicy
+            from orca_rl.rsl_env.mjlab_policy import MjlabRslRlActorPolicy, make_mjlab_orca_play_bridge
 
             policy = MjlabRslRlActorPolicy.from_checkpoint(checkpoint, device=device)
-            bridge = MjlabG1OrcaPlayBridge(env, expected_obs_dim=policy.input_dim)
+            if policy.output_dim != env.num_actions:
+                raise ValueError(
+                    "Unitree/mjlab checkpoint action dimension does not match the OrcaLab scene robot. "
+                    f"checkpoint_action_dim={policy.output_dim}, env_num_actions={env.num_actions}, "
+                    f"config_robot={robot_name or 'unknown'}"
+                )
+            bridge = make_mjlab_orca_play_bridge(env, expected_obs_dim=policy.input_dim, robot=robot_name)
             obs = bridge.get_observations()
             alignment = bridge.alignment_report
             print(

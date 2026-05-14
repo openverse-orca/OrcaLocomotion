@@ -28,6 +28,7 @@ class SceneBinding:
 
 
 G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda"
+GO2_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda"
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 G1_LOCAL_XML_CANDIDATES = [
@@ -268,6 +269,11 @@ def resolve_go2_scene_binding(
     min_count: int = 1,
     max_count: int | None = 1,
     num_envs: int | None = None,
+    *,
+    spawn_if_missing: bool = False,
+    max_auto_spawn_count: int = 1,
+    spawn_agent_name: str = "go2_000",
+    asset_path: str = GO2_AGENT_ASSET_PATH,
 ) -> SceneBinding:
     desired_count = int(num_envs or min_count)
     if num_envs is not None:
@@ -278,15 +284,42 @@ def resolve_go2_scene_binding(
         model_name="go2",
         joints=[robot_config["base_joint_name"], *list(robot_config["leg_joint_names"])],
         actuators=list(robot_config["actuator_names"]),
-        sites=[robot_config["imu_site_name"], *list(robot_config["contact_site_names"])],
         bodies=[*list(robot_config.get("base_contact_body_names", [])), *list(robot_config.get("foot_body_names", []))],
-        sensors=list(robot_config.get("sensor_foot_touch_names", [])),
     )
     report = scan_scene_for_template(
         orcagym_addr=orcagym_addr,
         time_step=time_step,
         template=template,
     )
+    if spawn_if_missing and len(report.complete_matches) < desired_count:
+        max_auto_spawn_count = max(0, int(max_auto_spawn_count))
+        missing_count = desired_count - len(report.complete_matches)
+        if missing_count > max_auto_spawn_count:
+            raise RuntimeError(
+                "Refusing to auto-publish a large GO2 batch into the OrcaLab scene. "
+                f"requested={desired_count}, existing={len(report.complete_matches)}, missing={missing_count}, "
+                f"max_auto_spawn_count={max_auto_spawn_count}. Prepare a batched scene explicitly or raise "
+                "`scene_binding.max_auto_spawn_count` after accepting the scene compile/render cost."
+            )
+        try:
+            publish_go2_scene(
+                orcagym_addr=orcagym_addr,
+                agent_name=spawn_agent_name,
+                asset_path=asset_path,
+                agent_count=desired_count,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "GO2 auto-publish failed. The current OrcaStudio asset library does not know the configured "
+                f"spawnable path: {asset_path!r}. Drag one GO2 actor into the layout manually, or update "
+                "`scene_binding.asset_path` to the spawnable path available in this OrcaStudio project."
+            ) from exc
+        report = scan_scene_for_template(
+            orcagym_addr=orcagym_addr,
+            time_step=time_step,
+            template=template,
+        )
+
     matches = require_complete_matches(
         report,
         min_count=min_count,
@@ -416,6 +449,35 @@ def publish_g1_scene(
     agent_name: str,
     asset_path: str = G1_AGENT_ASSET_PATH,
     agent_count: int = 1,
+) -> None:
+    _publish_unitree_scene(
+        orcagym_addr=orcagym_addr,
+        agent_name=agent_name,
+        asset_path=asset_path,
+        agent_count=agent_count,
+    )
+
+
+def publish_go2_scene(
+    orcagym_addr: str,
+    agent_name: str,
+    asset_path: str = GO2_AGENT_ASSET_PATH,
+    agent_count: int = 1,
+) -> None:
+    _publish_unitree_scene(
+        orcagym_addr=orcagym_addr,
+        agent_name=agent_name,
+        asset_path=asset_path,
+        agent_count=agent_count,
+    )
+
+
+def _publish_unitree_scene(
+    *,
+    orcagym_addr: str,
+    agent_name: str,
+    asset_path: str,
+    agent_count: int,
 ) -> None:
     from orca_gym.scene.orca_gym_scene import Actor, OrcaGymScene
     from orca_gym.utils.rotations import euler2quat

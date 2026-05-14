@@ -13,7 +13,7 @@ Orca RL 是一个把 RSL-RL 接入 OrcaLab / OrcaGym / MuJoCo 生态的训练与
 - G1 rough physical hfield terrain
 - 实验性 `mujoco_warp` step backend
 - OrcaLab scene play / debug
-- Unitree/mjlab G1 checkpoint 在 OrcaLab scene 中 play
+- Unitree/mjlab G1 / GO2 checkpoint 在 OrcaLab scene 中 play
 
 ## 当前架构
 
@@ -132,7 +132,7 @@ OrcaLab scene 中播放 Orca RL checkpoint：
 ```bash
 python -m orca_rl.run_play \
   --config Unitree-G1-Flat \
-  --ckpt <path_to_checkpoint>
+  --checkpoint <path_to_checkpoint>
 ```
 
 OrcaLab scene 中播放 Unitree/mjlab G1 checkpoint：
@@ -141,13 +141,13 @@ OrcaLab scene 中播放 Unitree/mjlab G1 checkpoint：
 python -m orca_rl.run_play \
   --config Unitree-G1-Flat \
   --policy-backend mjlab \
-  --ckpt /home/huan-hu/orca_rl/test_model_G1_mjlab_Flat.pt \
+  --checkpoint /home/huan-hu/orca_rl/test_model_G1_mjlab_Flat.pt \
   --lin-vel-x 0.5 \
   --lin-vel-y 0.0 \
   --ang-vel-z 0.0
 ```
 
-不要加 `--local-mujoco`，这样才会播放到 OrcaLab scene 里的 G1。若不传 `--ckpt`，会自动寻找：
+不要加 `--local-mujoco`，这样才会播放到 OrcaLab scene 里的 G1。若不传 `--checkpoint`，会自动寻找：
 
 ```text
 third_party/unitree_rl_mjlab/logs/rsl_rl/g1_velocity/*/model_*.pt
@@ -159,12 +159,36 @@ G1 scene binding / auto-publish 默认使用 OrcaLab 资产：
 assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda
 ```
 
+OrcaLab scene 中播放 Unitree/mjlab GO2 checkpoint：
+
+```bash
+python -m orca_rl.run_play \
+  --config Unitree-GO2-Flat \
+  --policy-backend mjlab \
+  --checkpoint <path_to_go2_model.pt> \
+  --lin-vel-x 0.5 \
+  --lin-vel-y 0.0 \
+  --ang-vel-z 0.0
+```
+
+若不传 `--checkpoint`，GO2 配置会自动寻找：
+
+```text
+third_party/unitree_rl_mjlab/logs/rsl_rl/go2_velocity/*/model_*.pt
+```
+
+GO2 scene binding / auto-publish 默认使用 OrcaLab 资产：
+
+```text
+assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda
+```
+
 本地 MuJoCo play：
 
 ```bash
 python -m orca_rl.run_play \
   --config Unitree-G1-Flat \
-  --ckpt <path_to_checkpoint> \
+  --checkpoint <path_to_checkpoint> \
   --local-mujoco
 ```
 
@@ -175,7 +199,7 @@ python -m orca_rl.run_play \
 ```bash
 python -m orca_rl.run_eval \
   --config Unitree-G1-Flat \
-  --ckpt <path_to_checkpoint> \
+  --checkpoint <path_to_checkpoint> \
   --steps 2000
 ```
 
@@ -323,19 +347,31 @@ joint_vel
 last_action
 ```
 
+Unitree/mjlab GO2 flat actor observation 是 47 维：
+
+```text
+base_ang_vel_body
+projected_gravity
+command
+phase(sin, cos)
+joint_pos_rel
+joint_vel
+last_action
+```
+
 所以播放 Unitree/mjlab checkpoint 时必须使用：
 
 ```bash
 --policy-backend mjlab
 ```
 
-这个 backend 做的事情：
+这个 backend 会按当前 `--config` 的机器人选择 G1 或 GO2 bridge。共同做的事情：
 
 ```text
 1. 读取 Unitree/mjlab RSL-RL checkpoint 里的 actor_state_dict
-2. 构造 mjlab 的 G1 actor observation
-3. 使用 mjlab action_scale = 0.25 * effort / stiffness
-4. 将 OrcaLab runtime G1 joint range / armature / damping / frictionloss 对齐到 mjlab 训练配置
+2. 构造 mjlab 的 actor observation
+3. 使用 mjlab action scale
+4. 将 OrcaLab runtime joint range / armature / damping / frictionloss 对齐到 mjlab 训练配置
 5. 将 OrcaLab runtime motor 改成 mjlab 风格的 MuJoCo position actuator 语义
 6. play step 写入 target joint position
 7. 让 MuJoCo 根据 stiffness / damping / force limit 产生控制力
@@ -347,12 +383,23 @@ last_action
 [orca_rl.play] Mjlab runtime alignment: tasks=1, agents=1, joints=29, actuators=29, position_actuator_tasks=1
 ```
 
-## mjlab G1 到 OrcaLab Play 的对齐
+GO2 的 mjlab bridge 额外会把 nominal joint pose 对齐到 `unitree_go2/go2_constants.py` 的 `INIT_STATE`：
+
+```text
+FL/RL hip = -0.1
+FR/RR hip = 0.1
+thigh = 0.9
+calf = -1.8
+```
+
+这一步很重要，因为 GO2 policy 的 `joint_pos_rel` 和 `action -> target_qpos` 都以 mjlab default pose 为零点。
+
+## mjlab G1 / GO2 到 OrcaLab Play 的对齐
 
 OrcaLab scene play 中没有修改 OrcaLab 源码、USDA 资产或缓存 XML 文件。对齐发生在当前 Python play 进程里：
 
 ```text
-OrcaLab scene G1 asset
+OrcaLab scene G1 / GO2 asset
   -> OrcaGym 下发 runtime MuJoCo model
   -> orca_rl 拿到 gym._mjModel
   -> patch 当前 MjModel 的 joint / actuator 参数

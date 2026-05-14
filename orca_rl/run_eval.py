@@ -22,7 +22,7 @@ def main() -> None:
         help="Registered task name, or Python cfg file. Use file.py:factory_name for a non-default factory.",
     )
     parser.add_argument("--list-tasks", action="store_true", help="List registered task names and exit.")
-    parser.add_argument("--ckpt", default=None)
+    parser.add_argument("--checkpoint", default=None, help="RSL-RL checkpoint path, e.g. model_1000.pt.")
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument(
@@ -55,7 +55,7 @@ def main() -> None:
         raise explain_missing_runtime_dependency(exc) from exc
 
     device = args.device or task_cfg.get("eval", {}).get("device", "cpu")
-    checkpoint = args.ckpt or str(
+    checkpoint = args.checkpoint or str(
         find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)
     )
     try:
