@@ -616,6 +616,7 @@ def _align_orca_g1_runtime_to_mjlab(env: Any, spec: MjlabG1ActionSpec) -> dict[s
         "joints": 0,
         "actuators": 0,
         "position_actuator_tasks": 0,
+        "imu_gyro_sensors": 0,
     }
     for task in getattr(env, "tasks", []):
         model = _task_mujoco_model(task)
@@ -628,6 +629,7 @@ def _align_orca_g1_runtime_to_mjlab(env: Any, spec: MjlabG1ActionSpec) -> dict[s
             )
             continue
         report["tasks"] += 1
+        report["imu_gyro_sensors"] += _count_mjlab_imu_gyro_sensors(task)
         for agent in task.agents:
             _align_agent_to_mjlab_position_actuators(model, task, agent, spec)
             agent.joint_limits = spec.joint_limits.copy()

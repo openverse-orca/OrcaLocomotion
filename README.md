@@ -590,6 +590,14 @@ last_action
 [orca_rl.play] Mjlab runtime alignment: tasks=1, agents=1, joints=29, actuators=29, position_actuator_tasks=1
 ```
 
+G1 mjlab play 还会打印 sensor 对齐：
+
+```text
+[orca_rl.play] Mjlab sensor alignment: imu_gyro_sensors=1
+```
+
+如果这里是 `0`，说明当前 G1 runtime XML 没有暴露 `*_imu_gyro` sensor，bridge 会退回到 qvel 推导的角速度。
+
 GO2 的 mjlab bridge 额外会把 nominal joint pose 对齐到 `unitree_go2/go2_constants.py` 的 `INIT_STATE`：
 
 ```text
