@@ -14,6 +14,7 @@ from .math_utils import quat_wxyz_to_rotmat
 
 _GRAVITY_W = np.array([0.0, 0.0, -1.0], dtype=np.float64)
 _GO2_MJLAB_BASE_HEIGHT = 0.32
+_G1_MJLAB_FOOT_FRICTION = 0.6
 _GO2_MJLAB_FOOT_FRICTION = np.array([0.6, 0.02, 0.01], dtype=np.float64)
 _GO2_MJLAB_FOOT_SOLIMP_HEAD = np.array([0.9, 0.95, 0.023], dtype=np.float64)
 
@@ -617,6 +618,9 @@ def _align_orca_g1_runtime_to_mjlab(env: Any, spec: MjlabG1ActionSpec) -> dict[s
         "actuators": 0,
         "position_actuator_tasks": 0,
         "imu_gyro_sensors": 0,
+        "contact_geoms": 0,
+        "foot_contact_geoms": 0,
+        "nonfoot_contact_geoms": 0,
     }
     for task in getattr(env, "tasks", []):
         model = _task_mujoco_model(task)
@@ -630,6 +634,9 @@ def _align_orca_g1_runtime_to_mjlab(env: Any, spec: MjlabG1ActionSpec) -> dict[s
             continue
         report["tasks"] += 1
         report["imu_gyro_sensors"] += _count_mjlab_imu_gyro_sensors(task)
+        contact_report = _align_g1_contact_model_to_mjlab(model, task)
+        for key, value in contact_report.items():
+            report[key] += value
         for agent in task.agents:
             _align_agent_to_mjlab_position_actuators(model, task, agent, spec)
             agent.joint_limits = spec.joint_limits.copy()
@@ -738,6 +745,56 @@ def _align_agent_to_mjlab_position_actuators(
         model.actuator_ctrlrange[actuator_id] = (low - delta, high + delta)
 
         _update_orca_model_dicts(task, joint_name, actuator_name, joint_id, actuator_id, low, high)
+
+
+def _align_g1_contact_model_to_mjlab(model: Any, task: Any) -> dict[str, int]:
+    import mujoco
+
+    report = {
+        "contact_geoms": 0,
+        "foot_contact_geoms": 0,
+        "nonfoot_contact_geoms": 0,
+    }
+    foot_body_names = {body for agent in task.agents for body in agent.foot_body_names}
+    robot_body_names = {body for agent in task.agents for body in agent.robot_body_names}
+    agent_prefixes = tuple(f"{agent.agent_name}_" for agent in task.agents)
+    sphere_type = int(mujoco.mjtGeom.mjGEOM_SPHERE)
+
+    for geom_id in range(int(model.ngeom)):
+        body_id = int(model.geom_bodyid[geom_id])
+        body_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id) or ""
+        if body_name not in robot_body_names and not body_name.startswith(agent_prefixes):
+            continue
+        if int(model.geom_contype[geom_id]) == 0 and int(model.geom_conaffinity[geom_id]) == 0:
+            continue
+
+        report["contact_geoms"] += 1
+        if _is_g1_runtime_foot_geom(model, geom_id, body_name, foot_body_names, sphere_type):
+            model.geom_condim[geom_id] = 3
+            model.geom_priority[geom_id] = max(int(model.geom_priority[geom_id]), 1)
+            model.geom_friction[geom_id, 0] = _G1_MJLAB_FOOT_FRICTION
+            report["foot_contact_geoms"] += 1
+        else:
+            model.geom_condim[geom_id] = 1
+            report["nonfoot_contact_geoms"] += 1
+
+    return report
+
+
+def _is_g1_runtime_foot_geom(
+    model: Any,
+    geom_id: int,
+    body_name: str,
+    foot_body_names: set[str],
+    sphere_type: int,
+) -> bool:
+    if body_name not in foot_body_names:
+        return False
+    if int(model.geom_type[geom_id]) != sphere_type:
+        return False
+    radius = float(model.geom_size[geom_id, 0])
+    local_z = float(model.geom_pos[geom_id, 2])
+    return 0.001 <= radius <= 0.03 and local_z < 0.0
 
 
 def _align_go2_contact_model_to_mjlab(model: Any, task: Any) -> dict[str, int]:

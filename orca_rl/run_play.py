@@ -205,7 +205,15 @@ def main() -> None:
                 f"joints={alignment['joints']}, actuators={alignment['actuators']}, "
                 f"position_actuator_tasks={alignment['position_actuator_tasks']}"
             )
-            if "imu_gyro_sensors" in alignment and "foot_contact_geoms" not in alignment:
+            if "contact_geoms" in alignment and str(robot_name).lower() == "g1":
+                print(
+                    "[orca_rl.play] G1 mjlab contact alignment: "
+                    f"contact_geoms={alignment.get('contact_geoms', 0)}, "
+                    f"foot_contact_geoms={alignment.get('foot_contact_geoms', 0)}, "
+                    f"nonfoot_contact_geoms={alignment.get('nonfoot_contact_geoms', 0)}, "
+                    f"imu_gyro_sensors={alignment.get('imu_gyro_sensors', 0)}"
+                )
+            elif "imu_gyro_sensors" in alignment and "foot_contact_geoms" not in alignment:
                 print(
                     "[orca_rl.play] Mjlab sensor alignment: "
                     f"imu_gyro_sensors={alignment.get('imu_gyro_sensors', 0)}"

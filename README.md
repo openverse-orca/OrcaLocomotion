@@ -590,13 +590,16 @@ last_action
 [orca_rl.play] Mjlab runtime alignment: tasks=1, agents=1, joints=29, actuators=29, position_actuator_tasks=1
 ```
 
-G1 mjlab play 还会打印 sensor 对齐：
+G1 mjlab play 还会打印 contact / sensor 对齐：
 
 ```text
-[orca_rl.play] Mjlab sensor alignment: imu_gyro_sensors=1
+[orca_rl.play] G1 mjlab contact alignment: contact_geoms=..., foot_contact_geoms=8, nonfoot_contact_geoms=..., imu_gyro_sensors=1
 ```
 
-如果这里是 `0`，说明当前 G1 runtime XML 没有暴露 `*_imu_gyro` sensor，bridge 会退回到 qvel 推导的角速度。
+G1 的 mjlab 训练配置把脚底 collision 设为 `condim=3`、`priority=1`、主摩擦 `0.6`，其它 collision 设为 `condim=1`。OrcaLab runtime 里的 G1 脚底是左右 ankle roll link 下的 8 个 sphere geom，所以 G1 bridge 会在当前 play 进程里把这些 foot sphere patch 成 mjlab 风格。
+
+如果 `foot_contact_geoms=0`，说明当前 G1 runtime XML 的脚底 geom 结构和已知 `g1_29dof_usda` 不同，需要重新抓 runtime XML。
+如果 `imu_gyro_sensors=0`，说明当前 G1 runtime XML 没有暴露 `*_imu_gyro` sensor，bridge 会退回到 qvel 推导的角速度。
 
 GO2 的 mjlab bridge 额外会把 nominal joint pose 对齐到 `unitree_go2/go2_constants.py` 的 `INIT_STATE`：
 
@@ -666,6 +669,16 @@ model.geom_solimp[foot_geom_id][:3] = [0.9, 0.95, 0.023]
 model.geom_condim[nonfoot_robot_geom_id] = 1
 model.geom_conaffinity[robot_geom_id] = 0
 task.cfg["reset"]["base_height"] = 0.32
+base_ang_vel_body = query_sensor_data("*_imu_gyro")
+```
+
+G1 也会 patch runtime contact geom，但不改 reset height：
+
+```text
+model.geom_condim[g1_foot_sphere_geom_id] = 3
+model.geom_priority[g1_foot_sphere_geom_id] = 1
+model.geom_friction[g1_foot_sphere_geom_id][0] = 0.6
+model.geom_condim[g1_nonfoot_robot_geom_id] = 1
 base_ang_vel_body = query_sensor_data("*_imu_gyro")
 ```
 
