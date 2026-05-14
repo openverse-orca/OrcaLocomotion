@@ -11,4 +11,6 @@ logs/
 runs/
 wandb/
 *.pt
+!test_model_G1_mjlab_Flat.pt
+!test_model_Go2_mjlab_Flat.pt
 *.onnx

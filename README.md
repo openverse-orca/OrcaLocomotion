@@ -1,11 +1,20 @@
 # Orca RL
 
-Orca RL 是一个把 RSL-RL 接入 OrcaLab / OrcaGym / MuJoCo 生态的训练与播放项目。当前重点是 Unitree G1 的速度跟踪训练、headless 本地 MuJoCo 训练、Unitree/mjlab checkpoint 回放到 OrcaLab scene，以及实验性 MJWarp 接入。
+Orca RL 是一个把 RSL-RL 接入 OrcaLab / OrcaGym / MuJoCo 生态的训练与播放项目。当前重点是 Unitree G1 / GO2 的速度跟踪训练、headless 本地 MuJoCo 训练、Unitree/mjlab checkpoint 回放到 OrcaLab scene，以及实验性 MJWarp 接入。
+
+核心目标：
+
+| 目标 | 说明 |
+|---|---|
+| RSL-RL 训练工具链接入 OrcaGym | 让 RSL-RL 的 PPO runner 能通过标准 VecEnv 接口训练 G1 / GO2 velocity task |
+| Headless 本地训练 | 训练热路径默认不依赖 OrcaLab viewport，不把大批量 actor 发布进交互场景 |
+| mjlab checkpoint 回放 | 让 Unitree/mjlab 训练出的 G1 / GO2 `.pt` checkpoint 可以直接在 OrcaLab scene 里 play |
+| 后端演进 | 保留稳定 CPU MuJoCo 后端，同时探索 MJWarp / nworld tensor 化训练路线 |
 
 当前可用能力：
 
 - Unitree G1 flat / rough velocity task
-- Unitree GO2 flat / rough 配置骨架
+- Unitree GO2 flat / rough velocity task
 - RSL-RL `OnPolicyRunner` 训练入口
 - 本地 MuJoCo headless training
 - `--headless` / `--no-render` 无渲染训练模式
@@ -29,6 +38,21 @@ RSL-RL
 
 G1 headless 训练默认不再要求手动打开 OrcaLab 场景，也不依赖 OrcaLab viewport 渲染。它会从本地 G1 MJCF 生成 batched XML，然后用 `OrcaGymLocalEnv` 在本地进程里跑 MuJoCo。
 
+训练时的批量设计：
+
+```text
+MuJoCo mjModel
+  ├── g1_000 / go2_000
+  ├── g1_001 / go2_001
+  └── ...
+      ↓
+一次 mj_step 推进整个模型
+      ↓
+按 qpos/qvel/actuator/contact offset 切回 RSL-RL logical env
+```
+
+旧实现里 `num_envs=4096` 会更接近 4096 个 Python task wrapper、4096 次 local-env 初始化和大量串行 step 调用。现在 `BatchedOrcaLocomotionTask` 把同一个 simulator group 里的机器人放进一个 MuJoCo model，RSL-RL 仍然看到 `(num_envs, num_actions)` 的标准向量环境。
+
 实验性 MJWarp 路径：
 
 ```text
@@ -42,6 +66,31 @@ OrcaGymLocalEnv loads local MuJoCo model
 这条路径能跑，但不是最终快路径。真正像 mjlab 一样快，需要单机器人 model + `mujoco_warp.put_data(nworld=num_envs)` + torch/warp 版 observation / reward / reset / contact，避免每个 control step 同步回 CPU。
 
 ## 安装
+
+本仓库包含两个用于 OrcaLab play smoke 的 mjlab checkpoint，使用 Git LFS 存储：
+
+```text
+test_model_G1_mjlab_Flat.pt
+test_model_Go2_mjlab_Flat.pt
+```
+
+首次 clone 前建议先安装 Git LFS：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git-lfs
+git lfs install
+git clone <repo-url>
+cd orca_rl
+git lfs pull
+```
+
+如果已经 clone 了仓库，但 `.pt` 文件只是 LFS pointer 或缺失：
+
+```bash
+git lfs install
+git lfs pull
+```
 
 在 OrcaLab Python 环境里安装：
 
@@ -213,8 +262,6 @@ python -m orca_rl.terrains.export \
 
 ## Headless / No-Rendering 训练
 
-这部分原来记录在 `TODO_headless_rendering.md`，现在已经合并到主 README。
-
 训练入口支持：
 
 ```text
@@ -249,6 +296,150 @@ play: OrcaLab scene / human render, 追求可视化检查
 ```
 
 G1 rough local MJCF 训练还会把 rough heightfield 插入 MuJoCo，作为真实 `hfield` collision geom，而不是只在 reward 里使用高度采样。
+
+大批量训练推荐先看 runtime summary，确认没有退回 scene-backed workflow：
+
+```text
+num_envs: <requested count>
+num_sim_groups: 1
+headless: True
+render_mode: none
+source: local_mjcf
+model_xml_path: /tmp/orca_rl_mjcf/...
+```
+
+如果 `source` 是 `orcalab_scene`，说明当前 run 正在使用 OrcaLab 交互场景。它适合 play / debug，但不是 G1 大批量 headless 训练的快路径。
+
+## RSL-RL 接入细节
+
+`OrcaRslRlVecEnv` 向 RSL-RL 暴露标准接口：
+
+```text
+num_envs
+num_actions
+max_episode_length
+episode_length_buf
+get_observations()
+step(actions)
+reset()
+close()
+```
+
+训练循环看到的是：
+
+```text
+actions shape: (num_envs, num_actions)
+rewards shape: (num_envs,)
+dones shape: (num_envs,)
+obs: TensorDict
+extras: dict
+```
+
+observation 使用两个组：
+
+```python
+obs_groups = {
+    "actor": ["policy"],
+    "critic": ["policy", "privileged"],
+}
+```
+
+actor policy 只读 `policy`，critic 可以额外读 `privileged`。
+
+### Action Pipeline
+
+Orca RL 原生 checkpoint 的 action 是归一化 residual joint-position action：
+
+```text
+policy action
+  -> clip
+  -> target_qpos around nominal pose
+  -> safety-scaled joint limit clamp
+  -> torque = kp * (target_qpos - qpos) - kd * qvel
+  -> torque clamp by effort limit
+  -> write full MuJoCo ctrl
+  -> mj_step()
+```
+
+同一个 simulator group 内，target 和 torque 计算按 `(num_agents, num_actions)` 的 NumPy 数组批量处理，再一次性写入全局 `ctrl`。
+
+### Observation Pipeline
+
+每个 agent 从 MuJoCo 读取：
+
+```text
+base position / quaternion
+base linear / angular velocity
+joint position / velocity
+velocity command
+last action / last torque
+foot position / velocity / contact
+domain randomization state
+optional height scan
+```
+
+actor observation 主要包括：
+
+```text
+base angular velocity
+projected gravity
+command
+joint position relative to nominal pose
+joint velocity
+last action
+optional height scan
+```
+
+privileged observation 额外包括 base linear velocity、base height、foot contacts、foot heights、foot velocities、last torque、domain randomization values 等。
+
+### Reward / Termination Pipeline
+
+flat task 使用：
+
+```text
+linear velocity tracking
+yaw velocity tracking
+vertical velocity penalty
+orientation penalty
+base height penalty
+torque penalty
+action-rate penalty
+joint-limit penalty
+foot-slip penalty
+termination penalty
+```
+
+rough task 额外接入 feet air time、foot clearance、body angular velocity、stand-still regularization、joint deviation、illegal contact 等项。
+
+termination 包括：
+
+```text
+too low / too high
+too tilted
+base contact
+illegal contact
+invalid numerical state
+timeout
+```
+
+### Domain Randomization
+
+当前 local MuJoCo 路径支持：
+
+```text
+friction scaling
+base mass delta
+base inertia scale
+base COM offset
+actuator kp/kd scaling
+torque strength scaling
+integer action latency
+push disturbance
+solver iteration / tolerance randomization
+contact solref / solimp / margin randomization
+```
+
+注意：一个 batched MuJoCo model 里有些字段是全局模型字段，不能在同一时刻天然做到每个 actor 都不同。当前实现保留 per-agent randomization state，并对 actuator scaling 等局部项逐 agent 生效；全局 model 参数则在 reset 时用代表性采样写入共享 model。
 
 ## 后端
 
@@ -547,7 +738,6 @@ group="0"
 ```text
 orca_rl/
 ├── README.md
-├── RSL_RL_RESTRUCTURE_REPORT.md
 ├── pyproject.toml
 ├── requirements.txt
 ├── third_party/
@@ -662,7 +852,33 @@ orca_rl/
 - `terrains/config.py`: terrain 参数配置。
 - `sensor/config.py`: contact / sensor config dataclass。
 - `managers/__init__.py`: manager-style 结构占位。
-- `RSL_RL_RESTRUCTURE_REPORT.md`: 早期 RSL-RL 接入 OrcaLab 的重构记录。
+
+## 交付摘要
+
+| 组件 | 说明 |
+|---|---|
+| `orca_rl/rsl_env/adapters/` | RSL-RL VecEnv 适配层 |
+| `orca_rl/rsl_env/batched_locomotion_task.py` | 批量 MuJoCo locomotion runtime |
+| `orca_rl/rsl_env/local_mjcf.py` | 本地 MJCF 批量生成器 |
+| `orca_rl/rsl_env/scene_binding.py` | OrcaLab scene 自动发现、asset auto-publish、G1 / GO2 binding |
+| `orca_rl/rsl_env/mjlab_policy.py` | Unitree/mjlab checkpoint loader、observation bridge、runtime actuator patch |
+| `orca_rl/rsl_env/mjwarp_runtime.py` | 实验性 MJWarp step wrapper |
+| `orca_rl/tasks/velocity/config/{g1,go2}/` | G1 / GO2 flat / rough task 配置 |
+| `orca_rl/terrains/` | 程序化 rough terrain 生成与导出 |
+| `third_party/unitree_rl_mjlab/` | Unitree/mjlab 资产、XML、常量 vendoring |
+
+当前技术范围：
+
+| 指标 | 当前状态 |
+|---|---|
+| 支持机器人 | G1 29 DoF、GO2 12 DoF |
+| 任务 | flat / rough velocity tracking |
+| 训练接口 | RSL-RL `OnPolicyRunner` |
+| 稳定物理后端 | CPU MuJoCo via OrcaGymLocalEnv |
+| 实验物理后端 | `mujoco_warp` compatibility bridge |
+| 可视化 | OrcaLab scene play |
+| mjlab checkpoint play | G1 / GO2 velocity checkpoint |
+| checkpoint 参数名 | `--checkpoint` |
 
 ## 验证命令
 

@@ -1,0 +1,2 @@
+test_model_G1_mjlab_Flat.pt filter=lfs diff=lfs merge=lfs -text
+test_model_Go2_mjlab_Flat.pt filter=lfs diff=lfs merge=lfs -text
