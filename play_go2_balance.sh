@@ -77,11 +77,15 @@ Usage:
   ./play_go2_balance.sh [walk|stand|spin|spin_cw] [--orcalab|--mjlab] [--viewer auto|native|viser]
 
 Examples:
+  # OrcaLab play, default backend.
   ./play_go2_balance.sh
   ./play_go2_balance.sh walk
   ./play_go2_balance.sh stand
+
+  # Native mjlab replay for comparison.
   ./play_go2_balance.sh walk --mjlab
   ./play_go2_balance.sh spin --mjlab --viewer native
+  ./play_go2_balance.sh stand --mjlab --viewer viser
 
 Checkpoint:
   ./test_model_Go2_mjlab_Flat.pt
