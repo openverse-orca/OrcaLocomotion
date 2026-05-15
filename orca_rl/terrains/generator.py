@@ -156,12 +156,30 @@ def _generate_sub_terrain(
     resolution: float,
     rng: np.random.Generator,
 ) -> np.ndarray:
+    if name == "flat":
+        return np.zeros((rows, cols), dtype=np.float64)
     if name == "pyramid_stairs":
-        return _pyramid_stairs(rows, cols, resolution, params)
+        return _pyramid_stairs(rows, cols, resolution, params, inverted=False)
+    if name == "pyramid_stairs_inv":
+        return _pyramid_stairs(rows, cols, resolution, params, inverted=True)
+    if name == "hf_pyramid_slope":
+        return _pyramid_slope(rows, cols, resolution, params, inverted=False)
+    if name == "hf_pyramid_slope_inv":
+        return _pyramid_slope(rows, cols, resolution, params, inverted=True)
     if name == "discrete_obstacles":
         return _discrete_obstacles(rows, cols, resolution, params, rng)
-    if name == "wave":
+    if name in {"wave", "wave_terrain"}:
         return _wave(rows, cols, resolution, params, rng)
+    if name == "random_rough":
+        return _random_uniform(
+            rows,
+            cols,
+            {
+                "height_range": params.get("noise_range", (0.02, 0.10)),
+                "step": params.get("noise_step", 0.02),
+            },
+            rng,
+        )
     return _random_uniform(rows, cols, params, rng)
 
 
@@ -174,7 +192,14 @@ def _random_uniform(rows: int, cols: int, params: dict[str, Any], rng: np.random
     return heights
 
 
-def _pyramid_stairs(rows: int, cols: int, resolution: float, params: dict[str, Any]) -> np.ndarray:
+def _pyramid_stairs(
+    rows: int,
+    cols: int,
+    resolution: float,
+    params: dict[str, Any],
+    *,
+    inverted: bool,
+) -> np.ndarray:
     low, high = params.get("step_height_range", (0.02, 0.10))
     step_height = 0.5 * (float(low) + float(high))
     step_width = max(float(params.get("step_width", 0.30)), resolution)
@@ -183,7 +208,26 @@ def _pyramid_stairs(rows: int, cols: int, resolution: float, params: dict[str, A
     center_c = 0.5 * (cols - 1)
     distance = np.maximum(np.abs(yy - center_r), np.abs(xx - center_c)) * resolution
     levels = np.floor(distance / step_width)
-    return -step_height * levels.astype(np.float64)
+    heights = -step_height * levels.astype(np.float64)
+    return -heights if inverted else heights
+
+
+def _pyramid_slope(
+    rows: int,
+    cols: int,
+    resolution: float,
+    params: dict[str, Any],
+    *,
+    inverted: bool,
+) -> np.ndarray:
+    low, high = params.get("slope_range", (0.0, 1.0))
+    slope = 0.5 * (float(low) + float(high))
+    yy, xx = np.mgrid[0:rows, 0:cols]
+    center_r = 0.5 * (rows - 1)
+    center_c = 0.5 * (cols - 1)
+    distance = np.maximum(np.abs(yy - center_r), np.abs(xx - center_c)) * resolution
+    heights = -slope * distance
+    return -heights if inverted else heights
 
 
 def _discrete_obstacles(

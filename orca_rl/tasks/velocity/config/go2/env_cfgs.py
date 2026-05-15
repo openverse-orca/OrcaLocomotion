@@ -33,7 +33,7 @@ def _apply_go2_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> Locomotion
         "spawn_agent_name": "go2_000",
         "asset_path": GO2_AGENT_ASSET_PATH,
     }
-    if cfg.terrain is not None:
+    if cfg.terrain is not None and cfg.terrain.terrain_type == "plane":
         cfg.terrain = replace(cfg.terrain, physics_enabled=False)
     cfg.rewards["base_height_l2"].params["asset_cfg"].body_names = ("base",)
     cfg.rewards["feet_slip"].params["asset_cfg"].site_names = ("FR", "FL", "RR", "RL")
@@ -43,6 +43,20 @@ def _apply_go2_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> Locomotion
     if play:
         cfg.episode["length_s"] = 1.0e9
         cfg.observations["actor"].enable_corruption = False
+        cfg.curriculum = {}
+        cfg.events.pop("push_robot", None)
+        if cfg.terrain is not None and cfg.terrain.terrain_generator is not None:
+            cfg.terrain = replace(
+                cfg.terrain,
+                terrain_generator=replace(
+                    cfg.terrain.terrain_generator,
+                    curriculum=False,
+                    num_rows=5,
+                    num_cols=5,
+                    border_width=10.0,
+                ),
+            )
+            cfg.randomization["terrain_curriculum"] = False
 
     return cfg
 
@@ -102,9 +116,9 @@ def unitree_go2_rough_env_cfg(play: bool = False) -> LocomotionEnvCfg:
         action_safety_scale=0.82,
         action_max_delta=GO2_MAX_DELTA,
         command_ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-0.5, 1.0),
-            lin_vel_y=(-0.35, 0.35),
-            ang_vel_z=(-0.7, 0.7),
+            lin_vel_x=(-1.0, 2.0),
+            lin_vel_y=(-1.0, 1.0),
+            ang_vel_z=(-1.0, 1.0),
         ),
         base_height=0.34,
         min_base_height=0.16,
@@ -123,6 +137,12 @@ def unitree_go2_rough_env_cfg(play: bool = False) -> LocomotionEnvCfg:
             "termination": -2.0,
         },
     )
+    cfg.sim["mujoco"] = {
+        "iterations": 10,
+        "ls_iterations": 20,
+        "ccd_iterations": 500,
+    }
+    cfg.sim["contact_sensor_maxmatch"] = 500
     cfg.train["num_learning_iterations"] = 30_000
     return _apply_go2_common_overrides(cfg, play)
 

@@ -17,6 +17,30 @@ from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH, GO2_AGENT_ASSET_P
 ensure_project_root_on_path()
 
 
+def _apply_rough_terrain_play_overrides(task_cfg: dict) -> None:
+    terrain_cfg = task_cfg.get("terrain")
+    if not isinstance(terrain_cfg, dict) or terrain_cfg.get("terrain_type") == "plane":
+        return
+    generator_cfg = dict(terrain_cfg.get("terrain_generator") or {})
+    if generator_cfg:
+        generator_cfg["curriculum"] = False
+        generator_cfg["num_cols"] = 5
+        generator_cfg["num_rows"] = 5
+        generator_cfg["border_width"] = 10.0
+        terrain_cfg["terrain_generator"] = generator_cfg
+    terrain_cfg["physics_enabled"] = True
+    task_cfg["curriculum"] = {}
+    events = task_cfg.setdefault("events", {})
+    events["randomize_terrain"] = {
+        "func": "randomize_terrain",
+        "mode": "reset",
+        "params": {},
+    }
+    randomization_cfg = task_cfg.setdefault("randomization", {})
+    randomization_cfg["terrain"] = "rough"
+    randomization_cfg["terrain_curriculum"] = False
+
+
 def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
     task_cfg.setdefault("episode", {})["length_s"] = 1.0e9
     task_cfg.setdefault("observations", {})["add_noise"] = False
@@ -35,6 +59,7 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
         events.pop(event_name, None)
     randomization_cfg = task_cfg.setdefault("randomization", {})
     randomization_cfg["max_action_delay_steps"] = 0
+    _apply_rough_terrain_play_overrides(task_cfg)
     scene_cfg = task_cfg.setdefault("scene_binding", {})
     if local_mujoco:
         return
@@ -44,14 +69,14 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
         scene_cfg["spawn_if_missing"] = True
         scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
         terrain_cfg = task_cfg.get("terrain")
-        if isinstance(terrain_cfg, dict):
+        if isinstance(terrain_cfg, dict) and terrain_cfg.get("terrain_type") == "plane":
             terrain_cfg["physics_enabled"] = False
     elif scene_cfg.get("resolver") == "go2":
         scene_cfg["asset_path"] = GO2_AGENT_ASSET_PATH
         scene_cfg["spawn_if_missing"] = True
         scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
         terrain_cfg = task_cfg.get("terrain")
-        if isinstance(terrain_cfg, dict):
+        if isinstance(terrain_cfg, dict) and terrain_cfg.get("terrain_type") == "plane":
             terrain_cfg["physics_enabled"] = False
 
 

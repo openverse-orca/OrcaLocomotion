@@ -22,17 +22,20 @@ class SubTerrainCfg:
 class TerrainGeneratorCfg:
     """Lightweight rough-terrain generator metadata inspired by mjlab/IsaacLab."""
 
-    num_rows: int = 8
-    num_cols: int = 8
+    num_rows: int = 10
+    num_cols: int = 20
     size: tuple[float, float] = (8.0, 8.0)
     horizontal_scale: float = 0.10
-    border_width: float = 2.0
+    border_width: float = 20.0
     curriculum: bool = True
     sub_terrains: tuple[SubTerrainCfg, ...] = (
-        SubTerrainCfg("random_uniform", 0.35, {"height_range": (-0.04, 0.04), "step": 0.01}),
-        SubTerrainCfg("pyramid_stairs", 0.25, {"step_height_range": (0.02, 0.10), "step_width": 0.30}),
-        SubTerrainCfg("discrete_obstacles", 0.20, {"height_range": (0.02, 0.10), "num_obstacles": 16}),
-        SubTerrainCfg("wave", 0.20, {"amplitude_range": (0.02, 0.08), "num_waves": 3}),
+        SubTerrainCfg("flat", 0.20, {}),
+        SubTerrainCfg("pyramid_stairs", 0.20, {"step_height_range": (0.0, 0.10), "step_width": 0.30}),
+        SubTerrainCfg("pyramid_stairs_inv", 0.20, {"step_height_range": (0.0, 0.10), "step_width": 0.30}),
+        SubTerrainCfg("hf_pyramid_slope", 0.10, {"slope_range": (0.0, 1.0)}),
+        SubTerrainCfg("hf_pyramid_slope_inv", 0.10, {"slope_range": (0.0, 1.0)}),
+        SubTerrainCfg("random_rough", 0.10, {"noise_range": (0.02, 0.10), "noise_step": 0.02}),
+        SubTerrainCfg("wave_terrain", 0.10, {"amplitude_range": (0.0, 0.20), "num_waves": 4}),
     )
 
     def to_dict(self) -> dict[str, Any]:
