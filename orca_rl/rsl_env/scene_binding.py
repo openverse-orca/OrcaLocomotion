@@ -274,6 +274,7 @@ def resolve_go2_scene_binding(
     max_auto_spawn_count: int = 1,
     spawn_agent_name: str = "go2_000",
     asset_path: str = GO2_AGENT_ASSET_PATH,
+    extra_actors: list[dict] | None = None,
 ) -> SceneBinding:
     desired_count = int(num_envs or min_count)
     if num_envs is not None:
@@ -307,6 +308,7 @@ def resolve_go2_scene_binding(
                 agent_name=spawn_agent_name,
                 asset_path=asset_path,
                 agent_count=desired_count,
+                extra_actors=extra_actors,
             )
         except Exception as exc:
             raise RuntimeError(
@@ -352,6 +354,7 @@ def resolve_g1_scene_binding(
     local_xml_output_dir: str | None = None,
     terrain_cfg: dict | None = None,
     terrain_seed: int = 1,
+    extra_actors: list[dict] | None = None,
 ) -> SceneBinding:
     desired_count = int(num_envs or min_count)
     if num_envs is not None:
@@ -415,6 +418,7 @@ def resolve_g1_scene_binding(
                 agent_name=spawn_agent_name,
                 asset_path=asset_path,
                 agent_count=desired_count,
+                extra_actors=extra_actors,
             )
         except Exception as exc:
             raise RuntimeError(
@@ -428,6 +432,7 @@ def resolve_g1_scene_binding(
             template=template,
         )
 
+    _raise_if_g1_scene_has_no_actuators(report, asset_path=asset_path)
     matches = require_complete_matches(
         report,
         min_count=min_count,
@@ -444,17 +449,35 @@ def resolve_g1_scene_binding(
     return SceneBinding(agent_names=agent_names, robot_config=robot_config)
 
 
+def _raise_if_g1_scene_has_no_actuators(report, *, asset_path: str) -> None:
+    if report.complete_matches or report.scene_names.actuators:
+        return
+    g1_like_joints = sorted(name for name in report.scene_names.joints if name.startswith("g1_") or "_hip_" in name)
+    if not g1_like_joints:
+        return
+    sensors = sorted(report.scene_names.sensors)
+    raise RuntimeError(
+        "The current OrcaLab G1 scene contains joints but no motor actuators, so RL policy play cannot send ctrl. "
+        f"Detected {len(g1_like_joints)} G1-like joints, 0 actuators, sensors={sensors}. "
+        "Remove this non-actuated G1 from the OrcaLab layout and import/publish an XML-backed G1 asset with 29 "
+        f"motor actuators, or run play with `--local-mujoco` for the local MJCF debug path. "
+        f"Configured G1 asset_path={asset_path!r}."
+    )
+
+
 def publish_g1_scene(
     orcagym_addr: str,
     agent_name: str,
     asset_path: str = G1_AGENT_ASSET_PATH,
     agent_count: int = 1,
+    extra_actors: list[dict] | None = None,
 ) -> None:
     _publish_unitree_scene(
         orcagym_addr=orcagym_addr,
         agent_name=agent_name,
         asset_path=asset_path,
         agent_count=agent_count,
+        extra_actors=extra_actors,
     )
 
 
@@ -463,12 +486,14 @@ def publish_go2_scene(
     agent_name: str,
     asset_path: str = GO2_AGENT_ASSET_PATH,
     agent_count: int = 1,
+    extra_actors: list[dict] | None = None,
 ) -> None:
     _publish_unitree_scene(
         orcagym_addr=orcagym_addr,
         agent_name=agent_name,
         asset_path=asset_path,
         agent_count=agent_count,
+        extra_actors=extra_actors,
     )
 
 
@@ -478,6 +503,7 @@ def _publish_unitree_scene(
     agent_name: str,
     asset_path: str,
     agent_count: int,
+    extra_actors: list[dict] | None = None,
 ) -> None:
     from orca_gym.scene.orca_gym_scene import Actor, OrcaGymScene
     from orca_gym.utils.rotations import euler2quat
@@ -507,6 +533,16 @@ def _publish_unitree_scene(
                 scale=1.0,
             )
             scene.add_actor(agent)
+        for extra_actor in extra_actors or []:
+            scene.add_actor(
+                Actor(
+                    name=str(extra_actor["name"]),
+                    asset_path=str(extra_actor["asset_path"]).replace("//", "/"),
+                    position=np.asarray(extra_actor.get("position", [0.0, 0.0, 0.6]), dtype=np.float64),
+                    rotation=euler2quat(extra_actor.get("rotation_euler", [0.0, 0.0, 0.0])),
+                    scale=float(extra_actor.get("scale", 1.0)),
+                )
+            )
         scene.publish_scene()
         time.sleep(3)
     finally:

@@ -11,6 +11,7 @@ from orca_gym.environment import OrcaGymLocalEnv
 
 from .action_mapper import ActionMapperConfig, ResidualJointTargetActionMapper
 from .curriculum import CommandConfig, FlatVelocityCommandSampler
+from .debug_visualizer import make_debug_arrow_visualizers
 from .math_utils import quat_mul_wxyz, yaw_quat_wxyz
 from .obs_builder import LocomotionObservationBuilder, LocomotionTaskState, ObservationConfig
 from .randomization import DomainRandomizer, RandomizationConfig, RandomizationState
@@ -156,6 +157,8 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int64)
         self._build_batch_arrays()
         self._build_contact_maps()
+        debug_cfg = cfg.get("debug_visualization", {})
+        self._debug_arrow_visualizers = make_debug_arrow_visualizers(self, debug_cfg)
         self.reset_model()
 
     async def _load_model_xml(self) -> str:
@@ -188,6 +191,26 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         if getattr(self, "model_xml_path", None):
             return
         super().close()
+
+    def render(self) -> None:
+        for visualizer in getattr(self, "_debug_arrow_visualizers", []):
+            visualizer.update()
+        super().render()
+
+    def debug_visualization_report(self) -> dict[str, Any]:
+        visualizers = getattr(self, "_debug_arrow_visualizers", [])
+        if not visualizers:
+            return {"debug_arrows": []}
+        return {"debug_arrows": [visualizer.describe() for visualizer in visualizers]}
+
+    def set_manual_commands(self, commands: np.ndarray) -> None:
+        commands = np.asarray(commands, dtype=np.float64).reshape(self.num_envs, 3)
+        for index, agent in enumerate(self.agents):
+            agent.command = commands[index].copy()
+        self._manual_command_override = True
+
+    def clear_manual_commands(self) -> None:
+        self._manual_command_override = False
 
     def get_observations(self, noisy: bool = True) -> dict[str, np.ndarray]:
         foot_positions = self._query_all_foot_positions()
@@ -526,6 +549,8 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
             agent.last_action = self._delayed_action(agent, clipped)
 
     def _resample_commands(self) -> None:
+        if getattr(self, "_manual_command_override", False):
+            return
         for index, agent in enumerate(self.agents):
             if self.episode_lengths[index] % agent.command_resample_steps == 0:
                 agent.command = agent.command_sampler.sample()

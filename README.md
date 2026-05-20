@@ -232,6 +232,134 @@ GO2 scene binding / auto-publish 默认使用 OrcaLab 资产：
 assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda
 ```
 
+OrcaLab command arrow debug：
+
+```bash
+python -m orca_rl.run_play \
+  --config Unitree-GO2-Flat \
+  --policy-backend mjlab \
+  --checkpoint ./checkpoints/test_model_Go2_mjlab_Flat.pt \
+  --lin-vel-x 0.5 \
+  --lin-vel-y 0.0 \
+  --ang-vel-z 0.0 \
+  --command-arrow \
+  --command-arrow-scale 0.55 \
+  --heading-arrow-scale 0.5 \
+  --command-arrow-actor cmd_arrow_000
+```
+
+`--command-arrow` 默认会在机器人 auto-publish 时把正式 OrcaLab 箭头资产同批发布进 scene，避免单独发布箭头覆盖现有机器人场景：
+
+```text
+assets/001d46537b9e555b/commandarrow/prefabs/command_arrow_usda
+```
+
+默认会同时绑定两根 debug arrow：
+
+| 箭头 | 默认 actor | 颜色 | 含义 |
+|---|---|---|---|
+| command arrow | `cmd_arrow_000` | cyan | 理想上层速度命令方向，body-frame command 转到 world |
+| velocity arrow | `heading_arrow_000` | orange | 机器人当前实际 base linear velocity 的 world XY 方向 |
+
+orange velocity arrow 仍复用原 heading arrow 资产，正式资产默认按下面路径查找：
+
+```text
+assets/001d46537b9e555b/heading_arrow/prefabs/heading_arrow_usda
+```
+
+如果平台生成的 orange arrow asset 路径不同，运行时显式传：
+
+```bash
+--heading-arrow-asset <generated_heading_arrow_asset_path>
+```
+
+如果只想更新已经手动放好的箭头，不让 `run_play` 自动发布：
+
+```bash
+--no-command-arrow-auto-publish
+```
+
+如果只想看 command arrow，不显示机器人当前朝向：
+
+```bash
+--no-heading-arrow
+```
+
+箭头尺寸是在 OrcaLab scene publish 时写入 actor scale 的，不是每帧 qpos 更新的一部分；已经存在于 scene 里的旧箭头不会因为 CLI 参数自动变小。默认尺寸已经调小为：
+
+```text
+command arrow scale = 0.55
+velocity arrow scale = 0.50
+```
+
+如果仍然遮挡机器人，可以重新发布 scene 时继续缩小：
+
+```bash
+--command-arrow-scale 0.35 --heading-arrow-scale 0.32
+```
+
+如果只是想测试“twist 幅值变化时策略和 debug arrow 的响应”，可以打开命令扫描。它会把命令从 0 平滑扫到指定 twist，再扫回 0：
+
+```bash
+--lin-vel-x 0.5 --ang-vel-z 0.6 --command-sweep --command-sweep-period 6.0
+```
+
+当前 debug arrow 使用旧的固定 mesh 箭头，只更新 freejoint 的位置和方向。两个箭头的 XY 跟随点已经对齐，只用 Z 分层：
+
+```text
+command arrow: base position + (0, 0, command_arrow_z)
+velocity arrow: base position + (0, 0, command_arrow_z + 0.15)
+```
+
+已上传并恢复为旧固定箭头的调试包：
+
+```text
+smb://192.168.110.53/share/CommandArrow.zip
+smb://192.168.110.53/share/HeadingArrow.zip
+```
+
+本地调试包仍保留在：
+
+```text
+assets/debug/command_arrow.usdz
+assets/debug/command_arrow.usda
+assets/debug/heading_arrow.usdz
+assets/debug/heading_arrow.usda
+assets/debug/command_arrow_mjcf.xml
+assets/debug/arrow_x.usd
+```
+
+使用协议：
+
+```text
+asset local +X = arrow forward
+actor name     = cmd_arrow_000 / heading_arrow_000
+joint type     = freejoint / 6DoF
+collision      = off
+```
+
+其中 `assets/debug/CommandArrow.zip` 和 `assets/debug/HeadingArrow.zip` 是上传生成正式 OrcaLab 箭头资产的 USDZ 源包；`command_arrow_mjcf.xml` 是带 freejoint 的 MuJoCo/Orca wrapper 示例：
+
+```xml
+<body name="cmd_arrow_000" pos="0 0 0">
+  <freejoint name="cmd_arrow_000_freejoint"/>
+  <geom name="cmd_arrow_000_visual" type="mesh" mesh="command_arrow_mesh" contype="0" conaffinity="0"/>
+</body>
+```
+
+`run_play` 会自动尝试寻找 `cmd_arrow_000_base_joint`、`cmd_arrow_000_freejoint`、`cmd_arrow_000_joint`、`command_arrow_freejoint`、`arrow_x_freejoint` 等常见 joint 名。如果 OrcaLab 里实际 joint 名不同，显式传：
+
+```bash
+--command-arrow-joint <freejoint_name>
+--heading-arrow-joint <freejoint_name>
+```
+
+当前旧固定箭头 pivot 不在箭尾，默认用 `--command-arrow-tail-x -0.25` 做补偿：
+
+```bash
+--command-arrow-tail-x -0.25
+```
+
 GO2 样例脚本默认走 OrcaLab play：
 
 ```bash

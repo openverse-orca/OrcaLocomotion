@@ -199,12 +199,31 @@ def make_mjlab_orca_play_bridge(env: Any, *, expected_obs_dim: int, robot: str |
 
 def find_latest_unitree_mjlab_checkpoint(project_root: str | Path, *, robot: str = "g1") -> Path:
     robot_name = str(robot).strip().lower()
-    root = Path(project_root).expanduser().resolve() / "third_party" / "unitree_rl_mjlab" / "logs" / "rsl_rl"
-    candidates = sorted(root.glob(f"{robot_name}_velocity/*/model_*.pt"), key=lambda path: path.stat().st_mtime)
+    project_root = Path(project_root).expanduser().resolve()
+    default_names = {
+        "g1": "test_model_G1_mjlab_Flat.pt",
+        "go2": "test_model_Go2_mjlab_Flat.pt",
+        "unitree_go2": "test_model_Go2_mjlab_Flat.pt",
+    }
+    candidate_paths = []
+    default_name = default_names.get(robot_name)
+    if default_name:
+        candidate_paths.extend(
+            [
+                project_root / "checkpoints" / default_name,
+                project_root / default_name,
+            ]
+        )
+    candidates = [path for path in candidate_paths if path.exists()]
+    root = project_root / "third_party" / "unitree_rl_mjlab" / "logs" / "rsl_rl"
+    candidates.extend(root.glob(f"{robot_name}_velocity/*/model_*.pt"))
+    candidates = sorted(candidates, key=lambda path: path.stat().st_mtime)
     if not candidates:
+        searched = [str(path) for path in candidate_paths]
+        searched.append(str(root / f"{robot_name}_velocity" / "*" / "model_*.pt"))
         raise FileNotFoundError(
             f"Cannot find a Unitree/mjlab {robot_name.upper()} checkpoint under "
-            f"{root}/{robot_name}_velocity/*/model_*.pt. Pass --checkpoint explicitly after training."
+            f"{searched}. Pass --checkpoint explicitly after training."
         )
     return candidates[-1]
 
