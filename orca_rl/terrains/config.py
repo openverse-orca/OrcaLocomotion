@@ -59,6 +59,8 @@ class TerrainCfg:
     restitution: float = 0.0
     physics_enabled: bool = False
     export_path: str | None = None
+    static_xml_path: str | None = None
+    height_field_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,4 +71,6 @@ class TerrainCfg:
             "restitution": self.restitution,
             "physics_enabled": self.physics_enabled,
             "export_path": self.export_path,
+            "static_xml_path": self.static_xml_path,
+            "height_field_path": self.height_field_path,
         }

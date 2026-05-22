@@ -22,6 +22,11 @@ ensure_project_root_on_path()
 
 DEFAULT_COMMAND_ARROW_ASSET_PATH = "assets/001d46537b9e555b/commandarrow/prefabs/command_arrow_usda"
 DEFAULT_HEADING_ARROW_ASSET_PATH = "assets/001d46537b9e555b/heading_arrow/prefabs/heading_arrow_usda"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PRIMITIVE_TERRAIN_XML = PROJECT_ROOT / "assets/terrain/orca_primitive_terrain_xml/terrain.xml"
+DEFAULT_PRIMITIVE_TERRAIN_HFIELD = PROJECT_ROOT / "assets/terrain/orca_primitive_terrain_xml/terrain_height_field.npz"
+DEFAULT_MULTI_TERRAIN_COLLISION_XML = PROJECT_ROOT / "assets/terrain/multi_terrain_map/multi_terrain_map_collision.xml"
+DEFAULT_MULTI_TERRAIN_HFIELD = PROJECT_ROOT / "assets/terrain/multi_terrain_map/multi_terrain_map_hfield.npz"
 
 
 def _apply_rough_terrain_play_overrides(task_cfg: dict) -> None:
@@ -69,6 +74,9 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
     _apply_rough_terrain_play_overrides(task_cfg)
     scene_cfg = task_cfg.setdefault("scene_binding", {})
     if local_mujoco:
+        if scene_cfg.get("resolver") in {"g1", "go2"}:
+            scene_cfg.setdefault("local_xml_path", "auto")
+            scene_cfg.setdefault("local_clone_spacing", 2.0)
         return
     if scene_cfg.get("resolver") == "g1":
         scene_cfg["local_xml_path"] = None
@@ -103,6 +111,39 @@ def _apply_fixed_play_command(
         commands["lin_vel_y"] = (float(lin_vel_y), float(lin_vel_y))
     if ang_vel_z is not None:
         commands["yaw_vel"] = (float(ang_vel_z), float(ang_vel_z))
+
+
+def _apply_local_terrain_map_override(task_cfg: dict, terrain_xml: str | Path) -> None:
+    xml_path = Path(terrain_xml).expanduser().resolve()
+    if not xml_path.exists():
+        raise FileNotFoundError(f"Local terrain map XML does not exist: {xml_path}")
+    hfield_path: Path | None = None
+    if xml_path == DEFAULT_PRIMITIVE_TERRAIN_XML:
+        hfield_path = DEFAULT_PRIMITIVE_TERRAIN_HFIELD
+    elif xml_path == DEFAULT_MULTI_TERRAIN_COLLISION_XML:
+        hfield_path = DEFAULT_MULTI_TERRAIN_HFIELD
+    else:
+        sibling_hfield = xml_path.with_name(f"{xml_path.stem}_height_field.npz")
+        fallback_hfield = xml_path.with_name("terrain_height_field.npz")
+        if sibling_hfield.exists():
+            hfield_path = sibling_hfield
+        elif fallback_hfield.exists():
+            hfield_path = fallback_hfield
+    if hfield_path is not None and not hfield_path.exists():
+        raise FileNotFoundError(f"Local terrain height field does not exist: {hfield_path}")
+    task_cfg["terrain"] = {
+        "terrain_type": "static_xml",
+        "physics_enabled": True,
+        "static_xml_path": str(xml_path),
+        "height_field_path": str(hfield_path) if hfield_path is not None else None,
+        "static_friction": 0.9,
+        "dynamic_friction": 0.8,
+        "restitution": 0.0,
+    }
+    randomization_cfg = task_cfg.setdefault("randomization", {})
+    randomization_cfg["terrain"] = "rough"
+    randomization_cfg["terrain_curriculum"] = False
+    task_cfg["curriculum"] = {}
 
 
 def _command_sweep_vector(args: argparse.Namespace, *, sim_time: float) -> np.ndarray:
@@ -381,6 +422,15 @@ def main() -> None:
         help="Play through the generated local MuJoCo MJCF instead of the OrcaLab scene.",
     )
     parser.add_argument(
+        "--local-terrain-map",
+        nargs="?",
+        const=str(DEFAULT_PRIMITIVE_TERRAIN_XML),
+        default=None,
+        help="Use a static MuJoCo terrain collision XML for local-mujoco play. "
+        "Omit the value to use assets/terrain/orca_primitive_terrain_xml/terrain.xml, "
+        "the same primitive terrain shape accepted by OrcaLab XML upload.",
+    )
+    parser.add_argument(
         "--remote",
         default=None,
         help="Override OrcaGym address, e.g. localhost:50051.",
@@ -405,6 +455,9 @@ def main() -> None:
             args.ang_vel_z = 0.0
 
     task_cfg, train_cfg = load_task_and_train_cfg(args.config)
+    if args.local_terrain_map is not None:
+        args.local_mujoco = True
+        _apply_local_terrain_map_override(task_cfg, args.local_terrain_map)
     _apply_fixed_play_command(
         task_cfg,
         lin_vel_x=args.lin_vel_x,

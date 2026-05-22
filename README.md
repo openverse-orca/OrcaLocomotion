@@ -232,6 +232,46 @@ GO2 scene binding / auto-publish 默认使用 OrcaLab 资产：
 assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda
 ```
 
+OrcaLab 可上传 primitive 地形资产：
+
+```text
+smb://192.168.110.53/share/OrcaPrimitiveTerrainXml.zip
+```
+
+上传项目名建议填：
+
+```text
+OrcaPrimitiveTerrainXml
+```
+
+本地文件：
+
+```text
+assets/terrain/orca_primitive_terrain_xml/terrain.xml
+assets/terrain/orca_primitive_terrain_xml/terrain_height_field.npz
+assets/terrain/OrcaPrimitiveTerrainXml.zip
+```
+
+这份资产只使用 MuJoCo primitive geom：
+
+```text
+plane / box / cylinder
+```
+
+OrcaLab 的 XML 上传链路目前可以接受 primitive geom，但不接受 MuJoCo `hfield` 高度图。所以本地 MuJoCo play 默认也改成同一份 `terrain.xml`，并用 `terrain_height_field.npz` 做 height scan 对齐。用本地 MuJoCo play 覆盖地形：
+
+```bash
+python -m orca_rl.run_play \
+  --config Unitree-Go2-Flat \
+  --policy-backend mjlab \
+  --checkpoint checkpoints/test_model_Go2_mjlab_Flat.pt \
+  --local-terrain-map \
+  --lin-vel-x 0.5 \
+  --command-arrow
+```
+
+`--local-terrain-map` 会自动打开 `--local-mujoco`，并把本地生成的 robot batch XML 地面替换成这份 OrcaLab 也能导入的 primitive terrain。注意这仍然是简化版静态地形，不是 mjlab 完整课程学习地形系统。
+
 OrcaLab command arrow debug：
 
 ```bash

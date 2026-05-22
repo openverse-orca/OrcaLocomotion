@@ -105,6 +105,10 @@ def prepare_local_terrain_cfg(
         return None
 
     cfg = deepcopy(terrain_cfg)
+    if cfg.get("terrain_type") in {"static_xml", "static_hfield"}:
+        cfg["physics_enabled"] = True
+        return cfg
+
     generator = dict(cfg.get("terrain_generator") or {})
     tile_size = tuple(float(value) for value in generator.get("size", (8.0, 8.0)))
     num_rows = max(1, int(generator.get("num_rows", 1)))
@@ -246,6 +250,11 @@ def _add_physical_terrain(
     terrain_cfg: dict[str, Any],
     terrain_seed: int,
 ) -> None:
+    static_xml_path = terrain_cfg.get("static_xml_path")
+    if static_xml_path:
+        _add_static_xml_terrain(root, worldbody, static_xml_path, terrain_cfg)
+        return
+
     _remove_existing_ground_geoms(worldbody)
     height_field = generate_height_field(terrain_cfg, np.random.default_rng(int(terrain_seed)))
     heights = np.asarray(height_field.heights, dtype=np.float64)
@@ -284,6 +293,54 @@ def _add_physical_terrain(
             "conaffinity": "1",
         },
     )
+
+
+def _add_static_xml_terrain(
+    root: ET.Element,
+    worldbody: ET.Element,
+    static_xml_path: str | Path,
+    terrain_cfg: dict[str, Any],
+) -> None:
+    static_path = Path(static_xml_path).expanduser().resolve()
+    if not static_path.exists():
+        raise FileNotFoundError(f"Static terrain XML does not exist: {static_path}")
+
+    _remove_existing_ground_geoms(worldbody)
+    static_tree = ET.parse(static_path)
+    static_root = static_tree.getroot()
+    _absolutize_asset_files(static_root, static_path)
+
+    target_asset = root.find("asset")
+    if target_asset is None:
+        target_asset = ET.SubElement(root, "asset")
+
+    source_asset = static_root.find("asset")
+    if source_asset is not None:
+        for child in source_asset:
+            name = child.get("name")
+            if name:
+                _remove_named_children(target_asset, child.tag, name)
+            target_asset.append(deepcopy(child))
+
+    source_worldbody = static_root.find("worldbody")
+    if source_worldbody is None:
+        raise ValueError(f"Static terrain XML has no <worldbody>: {static_path}")
+
+    for child in source_worldbody:
+        name = child.get("name")
+        if name:
+            _remove_named_children(worldbody, child.tag, name)
+        copied = deepcopy(child)
+        if copied.tag == "geom" and copied.get("name") == "terrain":
+            friction = float(terrain_cfg.get("static_friction", 0.9))
+            copied.set("friction", _format_float_list([friction, 0.005, 0.0001]))
+        worldbody.append(copied)
+
+
+def _remove_named_children(parent: ET.Element, tag: str, name: str) -> None:
+    for child in list(parent):
+        if child.tag == tag and child.get("name") == name:
+            parent.remove(child)
 
 
 def _remove_existing_ground_geoms(element: ET.Element) -> None:

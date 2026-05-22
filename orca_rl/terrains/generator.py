@@ -97,6 +97,9 @@ def generate_height_field(terrain_cfg: dict[str, Any] | None, rng: np.random.Gen
     if not terrain_cfg or terrain_cfg.get("terrain_type", "plane") == "plane":
         return _plane_height_field()
 
+    if terrain_cfg.get("terrain_type") in {"static_xml", "static_hfield"}:
+        return _load_static_height_field(terrain_cfg)
+
     generator = terrain_cfg.get("terrain_generator") or {}
     tile_size = tuple(float(v) for v in generator.get("size", (8.0, 8.0)))
     resolution = float(generator.get("horizontal_scale", 0.10))
@@ -141,6 +144,40 @@ def generate_height_field(terrain_cfg: dict[str, Any] | None, rng: np.random.Gen
         heights=heights,
         resolution=resolution,
         origin_xy=(-0.5 * total_x, -0.5 * total_y),
+    )
+
+
+def _load_static_height_field(terrain_cfg: dict[str, Any]) -> HeightField:
+    path_value = terrain_cfg.get("height_field_path")
+    if not path_value:
+        raise ValueError("Static terrain cfg requires `height_field_path` for height scan alignment.")
+    path = Path(path_value).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Static terrain height field does not exist: {path}")
+
+    payload = np.load(path)
+    heights = np.asarray(payload["height"], dtype=np.float64)
+    if "x" in payload and "y" in payload:
+        xs = np.asarray(payload["x"], dtype=np.float64)
+        ys = np.asarray(payload["y"], dtype=np.float64)
+        if xs.size < 2 or ys.size < 2:
+            raise ValueError(f"Static terrain height field has invalid x/y axes: {path}")
+        resolution_x = float(np.mean(np.diff(xs)))
+        resolution_y = float(np.mean(np.diff(ys)))
+        if not np.isclose(resolution_x, resolution_y, rtol=1e-3, atol=1e-6):
+            raise ValueError(f"Static terrain requires square samples, got dx={resolution_x}, dy={resolution_y}.")
+        return HeightField(
+            heights=heights,
+            resolution=abs(resolution_x),
+            origin_xy=(float(xs[0]), float(ys[0])),
+        )
+
+    resolution = float(payload["resolution"]) if "resolution" in payload else float(terrain_cfg.get("resolution", 0.1))
+    origin = terrain_cfg.get("origin_xy", (-0.5 * (heights.shape[1] - 1) * resolution, -0.5 * (heights.shape[0] - 1) * resolution))
+    return HeightField(
+        heights=heights,
+        resolution=resolution,
+        origin_xy=(float(origin[0]), float(origin[1])),
     )
 
 
