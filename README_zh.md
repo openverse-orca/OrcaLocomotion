@@ -1,8 +1,7 @@
 # Orca RL
 
-Orca RL 为 OrcaLab 回放提供一组 Unitree 运动控制演示。训练基于捆绑的
-Unitree/mjlab 项目；本仓库专注于加载训练产出的 checkpoint，在 OrcaLab
-中配合场景资产进行回放。
+Orca RL 是 OrcaLab 的训练扩展组件，支持训练 Unitree 机器人的运动控制策略，
+并可在 OrcaLab 中播放训练好的策略。
 
 ## 支持的任务
 

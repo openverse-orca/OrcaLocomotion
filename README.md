@@ -1,9 +1,7 @@
 # Orca RL
 
-Orca RL packages a small set of Unitree locomotion demos for OrcaLab playback.
-Training follows the bundled Unitree/mjlab project; this repository focuses on
-loading those checkpoints and playing them in OrcaLab with the matching scene
-assets.
+Orca RL is an OrcaLab training extension for Unitree robot locomotion policies.
+Train policies and play them back in OrcaLab.
 
 ## Supported Tasks
 
