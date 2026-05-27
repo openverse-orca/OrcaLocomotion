@@ -386,7 +386,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Play a trained Orca locomotion RSL-RL policy.")
     parser.add_argument(
         "--config",
-        default="Unitree-GO2-Flat",
+        default="Unitree-Go2-Flat",
         help="Registered task name, or Python cfg file. Use file.py:factory_name for a non-default factory.",
     )
     parser.add_argument("--list-tasks", action="store_true", help="List registered task names and exit.")

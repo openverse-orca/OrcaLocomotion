@@ -65,22 +65,16 @@ def _ensure_builtin_tasks() -> None:
         "Unitree G1 velocity tracking on flat terrain.",
     )
     register_task(
-        "Unitree-G1-Rough",
-        "orca_rl.tasks.velocity.config.g1.env_cfgs:unitree_g1_rough_env_cfg",
-        "orca_rl.tasks.velocity.config.g1.rl_cfg:unitree_g1_rough_ppo_runner_cfg",
-        "Unitree G1 velocity tracking with generated physical rough terrain.",
-    )
-    register_task(
-        "Unitree-GO2-Flat",
+        "Unitree-Go2-Flat",
         "orca_rl.tasks.velocity.config.go2.env_cfgs:unitree_go2_flat_env_cfg",
         "orca_rl.tasks.velocity.config.go2.rl_cfg:unitree_go2_ppo_runner_cfg",
         "Unitree Go2 velocity tracking on flat terrain.",
     )
     register_task(
-        "Unitree-GO2-Rough",
+        "Unitree-Go2-Rough",
         "orca_rl.tasks.velocity.config.go2.env_cfgs:unitree_go2_rough_env_cfg",
         "orca_rl.tasks.velocity.config.go2.rl_cfg:unitree_go2_rough_ppo_runner_cfg",
-        "Unitree Go2 velocity tracking with generated rough-terrain metadata.",
+        "Unitree Go2 velocity tracking on rough terrain.",
     )
 
 
