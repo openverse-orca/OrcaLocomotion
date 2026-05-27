@@ -578,7 +578,7 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
         armature=armature,
         frictionloss=frictionloss,
         joint_limits=joint_limits,
-        neutral_qpos=np.zeros(len(joint_names), dtype=np.float64),
+        neutral_qpos=_g1_dangling_arm_qpos(joint_names, joint_limits),
         arm_joint_mask=np.asarray([_is_g1_arm_joint(joint_name) for joint_name in joint_names], dtype=bool),
     )
 
@@ -644,6 +644,15 @@ def _load_mjlab_g1_joint_limits(g1_constants: Any, joint_names: list[str]) -> np
 
 def _is_g1_arm_joint(joint_name: str) -> bool:
     return any(part in str(joint_name) for part in ("shoulder", "elbow", "wrist"))
+
+
+def _g1_dangling_arm_qpos(joint_names: list[str], joint_limits: np.ndarray) -> np.ndarray:
+    qpos = np.zeros(len(joint_names), dtype=np.float64)
+    for index, joint_name in enumerate(joint_names):
+        if "elbow" in str(joint_name):
+            low, high = np.asarray(joint_limits[index], dtype=np.float64)
+            qpos[index] = float(np.clip(-1.0, low, high))
+    return qpos
 
 
 def _initialize_g1_arms_neutral(env: Any, spec: MjlabG1ActionSpec) -> None:
