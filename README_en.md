@@ -78,3 +78,4 @@ Upload them in OrcaLab's XML asset upload flow.
 Training tasks and robot assets are built with reference to
 [unitree_rl_mjlab](https://github.com/unitreerobotics/unitree_rl_mjlab), using
 [mujocolab/mjlab](https://github.com/mujocolab/mjlab) as the training backend.
+Users may choose other third-party extension projects based on mjlab.
