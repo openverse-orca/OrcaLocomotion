@@ -71,15 +71,6 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 
 在 OrcaLab 的 XML 资产上传流程中上传即可。
 
-## 开发
-
-发布前建议执行以下检查：
-
-```bash
-python -m compileall orca_rl
-git diff --check
-```
-
 ## 致谢
 
 训练任务和机器人资产基于 [mujocolab/mjlab](https://github.com/mujocolab/mjlab)

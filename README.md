@@ -73,15 +73,6 @@ Upload the XML terrain files to OrcaLab before using terrain playback:
 
 Upload them in OrcaLab's XML asset upload flow.
 
-## Development
-
-Useful checks before publishing changes:
-
-```bash
-python -m compileall orca_rl
-git diff --check
-```
-
 ## Acknowledgments
 
 Training tasks and robot assets are based on
