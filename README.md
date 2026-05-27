@@ -84,6 +84,7 @@ git diff --check
 
 ## Acknowledgments
 
-Training tasks and robot assets are based on the bundled
-`third_party/unitree_rl_mjlab` project. Users may replace it with other
+Training tasks and robot assets are based on
+[mujocolab/mjlab](https://github.com/mujocolab/mjlab) and the bundled
+`third_party/unitree_rl_mjlab` project. Users may replace them with other
 third-party training libraries as needed.

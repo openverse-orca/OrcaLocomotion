@@ -82,5 +82,5 @@ git diff --check
 
 ## 致谢
 
-训练任务和机器人资产参照 `third_party/unitree_rl_mjlab` 项目编写，
-用户可自行替换为其他第三方训练库。
+训练任务和机器人资产基于 [mujocolab/mjlab](https://github.com/mujocolab/mjlab)
+和捆绑的 `third_party/unitree_rl_mjlab` 项目，用户可自行替换为其他第三方训练库。
