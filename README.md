@@ -28,13 +28,6 @@ conda activate orca_rl
 pip install -r requirements.txt
 ```
 
-For native training setup details, see the bundled Unitree/mjlab guide:
-
-```text
-third_party/unitree_rl_mjlab/doc/setup_en.md
-third_party/unitree_rl_mjlab/doc/setup_zh.md
-```
-
 ## Training
 
 Train with the bundled Unitree/mjlab project. These commands run the native
