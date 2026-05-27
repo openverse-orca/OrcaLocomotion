@@ -51,43 +51,30 @@ The resulting checkpoints can be passed to Orca RL playback.
 Start OrcaLab, then run the playback CLI from the repository root:
 
 ```bash
-python -m orca_rl.run_play \
-  --config Unitree-Go2-Flat \
-  --policy-backend mjlab \
-  --checkpoint <checkpoint.pt>
-
-python -m orca_rl.run_play \
-  --config Unitree-Go2-Rough \
-  --policy-backend mjlab \
-  --checkpoint <checkpoint.pt>
-
-python -m orca_rl.run_play \
-  --config Unitree-G1-Flat \
-  --policy-backend mjlab \
-  --checkpoint <checkpoint.pt>
+python -m orca_rl.run_play --config Unitree-Go2-Flat --checkpoint <checkpoint.pt>
+python -m orca_rl.run_play --config Unitree-Go2-Rough --checkpoint <checkpoint.pt>
+python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 ```
 
 Use a checkpoint produced by the Unitree/mjlab training step.
 
 ## Assets
 
-Upload the XML terrain packages to OrcaLab before using terrain playback:
+Upload the XML terrain files to OrcaLab before using terrain playback:
 
-| Asset package | Use |
+| Asset | Use |
 | --- | --- |
-| `assets/terrain/OrcaPrimitiveTerrainXml.zip` | Primitive XML terrain smoke tests |
-| `assets/terrain/MjlabRough5x5Xml.zip` | Go2 rough terrain playback |
+| `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | Primitive XML terrain smoke tests |
+| `assets/terrain/mjlab_rough_5x5_xml/terrain.xml` | Go2 rough terrain playback |
 
-Upload them in OrcaLab's XML asset upload flow. The rough Go2 playback uses the
-uploaded rough terrain asset and spawns it at `z=0.05`; the Go2 actor starts at
-the same height so it begins on the terrain instead of dropping onto it.
+Upload them in OrcaLab's XML asset upload flow.
 
 ## Development
 
 Useful checks before publishing changes:
 
 ```bash
-python -m compileall orca_rl assets/terrain/mjlab_rough_5x5_xml/generate_terrain.py
+python -m compileall orca_rl
 git diff --check
 ```
 
