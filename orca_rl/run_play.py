@@ -403,8 +403,8 @@ def main() -> None:
     parser.add_argument(
         "--policy-backend",
         choices=("orca", "mjlab"),
-        default="orca",
-        help="`orca` loads checkpoints trained by orca_rl; `mjlab` loads Unitree/mjlab velocity checkpoints.",
+        default="mjlab",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=0, help="0 means run until interrupted.")
