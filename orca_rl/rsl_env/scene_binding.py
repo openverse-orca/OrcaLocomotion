@@ -286,6 +286,7 @@ def resolve_go2_scene_binding(
     spawn_if_missing: bool = False,
     max_auto_spawn_count: int = 1,
     spawn_agent_name: str = "go2_000",
+    spawn_height: float = 0.0,
     asset_path: str = GO2_AGENT_ASSET_PATH,
     local_xml_path: str | None = None,
     local_clone_spacing: float = 2.0,
@@ -354,6 +355,7 @@ def resolve_go2_scene_binding(
             publish_go2_scene(
                 orcagym_addr=orcagym_addr,
                 agent_name=spawn_agent_name,
+                spawn_height=float(spawn_height),
                 asset_path=asset_path,
                 agent_count=desired_count,
                 extra_actors=extra_actors,
@@ -396,6 +398,7 @@ def resolve_g1_scene_binding(
     spawn_if_missing: bool = False,
     max_auto_spawn_count: int = 1,
     spawn_agent_name: str = "g1_000",
+    spawn_height: float = 0.0,
     asset_path: str = G1_AGENT_ASSET_PATH,
     local_xml_path: str | None = None,
     local_clone_spacing: float = 2.0,
@@ -464,6 +467,7 @@ def resolve_g1_scene_binding(
             publish_g1_scene(
                 orcagym_addr=orcagym_addr,
                 agent_name=spawn_agent_name,
+                spawn_height=float(spawn_height),
                 asset_path=asset_path,
                 agent_count=desired_count,
                 extra_actors=extra_actors,
@@ -519,10 +523,13 @@ def publish_g1_scene(
     asset_path: str = G1_AGENT_ASSET_PATH,
     agent_count: int = 1,
     extra_actors: list[dict] | None = None,
+    *,
+    spawn_height: float = 0.0,
 ) -> None:
     _publish_unitree_scene(
         orcagym_addr=orcagym_addr,
         agent_name=agent_name,
+        spawn_height=spawn_height,
         asset_path=asset_path,
         agent_count=agent_count,
         extra_actors=extra_actors,
@@ -535,10 +542,13 @@ def publish_go2_scene(
     asset_path: str = GO2_AGENT_ASSET_PATH,
     agent_count: int = 1,
     extra_actors: list[dict] | None = None,
+    *,
+    spawn_height: float = 0.0,
 ) -> None:
     _publish_unitree_scene(
         orcagym_addr=orcagym_addr,
         agent_name=agent_name,
+        spawn_height=spawn_height,
         asset_path=asset_path,
         agent_count=agent_count,
         extra_actors=extra_actors,
@@ -549,6 +559,7 @@ def _publish_unitree_scene(
     *,
     orcagym_addr: str,
     agent_name: str,
+    spawn_height: float,
     asset_path: str,
     agent_count: int,
     extra_actors: list[dict] | None = None,
@@ -576,7 +587,11 @@ def _publish_unitree_scene(
             agent = Actor(
                 name=name,
                 asset_path=asset_path.replace("//", "/"),
-                position=[x0 + spacing * (index % grid_width), y0 + spacing * (index // grid_width), 0],
+                position=[
+                    x0 + spacing * (index % grid_width),
+                    y0 + spacing * (index // grid_width),
+                    float(spawn_height),
+                ],
                 rotation=euler2quat([0, 0, 0]),
                 scale=1.0,
             )

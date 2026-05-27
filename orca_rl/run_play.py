@@ -22,8 +22,12 @@ ensure_project_root_on_path()
 
 DEFAULT_COMMAND_ARROW_ASSET_PATH = "assets/001d46537b9e555b/commandarrow/prefabs/command_arrow_usda"
 DEFAULT_HEADING_ARROW_ASSET_PATH = "assets/001d46537b9e555b/heading_arrow/prefabs/heading_arrow_usda"
+DEFAULT_ROUGH_TERRAIN_ASSET_PATH = (
+    "assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda"
+)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PRIMITIVE_TERRAIN_XML = PROJECT_ROOT / "assets/terrain/orca_primitive_terrain_xml/terrain.xml"
+DEFAULT_MJLAB_ROUGH_5X5_XML = PROJECT_ROOT / "assets/terrain/mjlab_rough_5x5_xml/terrain.xml"
 DEFAULT_PRIMITIVE_TERRAIN_HFIELD = PROJECT_ROOT / "assets/terrain/orca_primitive_terrain_xml/terrain_height_field.npz"
 DEFAULT_MULTI_TERRAIN_COLLISION_XML = PROJECT_ROOT / "assets/terrain/multi_terrain_map/multi_terrain_map_collision.xml"
 DEFAULT_MULTI_TERRAIN_HFIELD = PROJECT_ROOT / "assets/terrain/multi_terrain_map/multi_terrain_map_hfield.npz"
@@ -146,6 +150,39 @@ def _apply_local_terrain_map_override(task_cfg: dict, terrain_xml: str | Path) -
     task_cfg["curriculum"] = {}
 
 
+def _is_rough_play_task(task_cfg: dict) -> bool:
+    terrain_cfg = task_cfg.get("terrain")
+    if not isinstance(terrain_cfg, dict):
+        return False
+    return terrain_cfg.get("terrain_type") not in {None, "plane"}
+
+
+def _is_go2_rough_play_task(task_cfg: dict) -> bool:
+    return str(task_cfg.get("robot", "")).lower() == "go2" and _is_rough_play_task(task_cfg)
+
+
+def _apply_rough_terrain_visual_config(
+    task_cfg: dict,
+    *,
+    enabled: bool,
+    asset_path: str,
+    actor_name: str,
+    scale: float,
+    auto_publish: bool,
+) -> None:
+    if not enabled:
+        return
+    task_cfg["rough_terrain_visual"] = {
+        "enabled": True,
+        "asset_path": asset_path,
+        "actor_name": actor_name,
+        "position": [0.0, 0.0, 0.05],
+        "rotation_euler": [0.0, 0.0, 0.0],
+        "scale": float(scale),
+        "auto_publish": bool(auto_publish),
+    }
+
+
 def _command_sweep_vector(args: argparse.Namespace, *, sim_time: float) -> np.ndarray:
     target = np.array(
         [
@@ -263,6 +300,41 @@ def _maybe_publish_command_arrow(task_cfg: dict, *, local_mujoco: bool) -> None:
                 )
 
 
+def _maybe_publish_rough_terrain_visual(task_cfg: dict, *, local_mujoco: bool) -> None:
+    if local_mujoco:
+        return
+    terrain_visual_cfg = task_cfg.get("rough_terrain_visual")
+    if not isinstance(terrain_visual_cfg, dict) or not terrain_visual_cfg.get("enabled"):
+        return
+    if not bool(terrain_visual_cfg.get("auto_publish", True)):
+        return
+
+    try:
+        from orca_rl.rsl_env.debug_visualizer import ensure_scene_actor
+    except ImportError as exc:
+        raise explain_missing_runtime_dependency(exc) from exc
+
+    for address in task_cfg.get("orcagym_addresses") or ["localhost:50051"]:
+        try:
+            published = ensure_scene_actor(
+                orcagym_addr=str(address),
+                actor_name=str(terrain_visual_cfg.get("actor_name") or "mjlab_rough_5x5_terrain"),
+                asset_path=str(terrain_visual_cfg.get("asset_path") or DEFAULT_ROUGH_TERRAIN_ASSET_PATH),
+                position=terrain_visual_cfg.get("position", [0.0, 0.0, 0.0]),
+                rotation_euler=terrain_visual_cfg.get("rotation_euler", [0.0, 0.0, 0.0]),
+                scale=float(terrain_visual_cfg.get("scale", 1.0)),
+            )
+        except Exception as exc:
+            print(f"[orca_rl.play] Rough terrain visual auto-publish skipped for {address}: {exc}")
+            continue
+        if published:
+            print(
+                "[orca_rl.play] Rough terrain visual auto-published: "
+                f"address={address}, actor={terrain_visual_cfg.get('actor_name')}, "
+                f"asset={terrain_visual_cfg.get('asset_path')}"
+            )
+
+
 def _configure_debug_arrow_scene_actors(task_cfg: dict, *, local_mujoco: bool) -> None:
     if local_mujoco:
         return
@@ -271,8 +343,8 @@ def _configure_debug_arrow_scene_actors(task_cfg: dict, *, local_mujoco: bool) -
         return
     extra_actors = []
     for key, position in (
-        ("command_arrow", [0.0, 0.0, 0.6]),
-        ("heading_arrow", [0.0, 0.0, 0.8]),
+        ("command_arrow", [0.0, 0.0, 1.1]),
+        ("heading_arrow", [0.0, 0.0, 1.25]),
     ):
         arrow_cfg = debug_cfg.get(key)
         if not isinstance(arrow_cfg, dict) or not arrow_cfg.get("enabled"):
@@ -288,7 +360,26 @@ def _configure_debug_arrow_scene_actors(task_cfg: dict, *, local_mujoco: bool) -
             }
         )
     if extra_actors:
-        task_cfg.setdefault("scene_binding", {})["extra_actors"] = extra_actors
+        task_cfg.setdefault("scene_binding", {}).setdefault("extra_actors", []).extend(extra_actors)
+
+
+def _configure_rough_terrain_scene_actor(task_cfg: dict, *, local_mujoco: bool) -> None:
+    if local_mujoco:
+        return
+    terrain_visual_cfg = task_cfg.get("rough_terrain_visual")
+    if not isinstance(terrain_visual_cfg, dict) or not terrain_visual_cfg.get("enabled"):
+        return
+    if not bool(terrain_visual_cfg.get("auto_publish", True)):
+        return
+    task_cfg.setdefault("scene_binding", {}).setdefault("extra_actors", []).append(
+        {
+            "name": str(terrain_visual_cfg.get("actor_name") or "mjlab_rough_5x5_terrain"),
+            "asset_path": str(terrain_visual_cfg.get("asset_path") or DEFAULT_ROUGH_TERRAIN_ASSET_PATH),
+            "position": terrain_visual_cfg.get("position", [0.0, 0.0, 0.0]),
+            "rotation_euler": terrain_visual_cfg.get("rotation_euler", [0.0, 0.0, 0.0]),
+            "scale": float(terrain_visual_cfg.get("scale", 1.0)),
+        }
+    )
 
 
 def main() -> None:
@@ -392,7 +483,7 @@ def main() -> None:
         help="Freejoint name for the command arrow. If omitted, common names are auto-detected.",
     )
     parser.add_argument("--command-arrow-agent", type=int, default=0, help="Agent index the command arrow follows.")
-    parser.add_argument("--command-arrow-z", type=float, default=0.45, help="Height above robot base for the arrow.")
+    parser.add_argument("--command-arrow-z", type=float, default=0.9, help="Height above robot base for the arrow.")
     parser.add_argument(
         "--command-arrow-forward",
         type=float,
@@ -424,11 +515,32 @@ def main() -> None:
     parser.add_argument(
         "--local-terrain-map",
         nargs="?",
-        const=str(DEFAULT_PRIMITIVE_TERRAIN_XML),
+        const="auto",
         default=None,
         help="Use a static MuJoCo terrain collision XML for local-mujoco play. "
-        "Omit the value to use assets/terrain/orca_primitive_terrain_xml/terrain.xml, "
-        "the same primitive terrain shape accepted by OrcaLab XML upload.",
+        "Omit the value to use the mjlab rough 5x5 terrain for rough configs, "
+        "or assets/terrain/orca_primitive_terrain_xml/terrain.xml for flat configs.",
+    )
+    parser.add_argument(
+        "--no-rough-terrain-visual",
+        action="store_true",
+        help="Do not auto-publish the OrcaLab visual terrain asset for rough play configs.",
+    )
+    parser.add_argument(
+        "--rough-terrain-asset",
+        default=DEFAULT_ROUGH_TERRAIN_ASSET_PATH,
+        help="OrcaLab spawnable path for the rough terrain visual asset.",
+    )
+    parser.add_argument(
+        "--rough-terrain-actor",
+        default="mjlab_rough_5x5_terrain",
+        help="Actor name used when auto-publishing the rough terrain visual asset.",
+    )
+    parser.add_argument(
+        "--rough-terrain-scale",
+        type=float,
+        default=1.0,
+        help="Scale for the rough terrain visual actor.",
     )
     parser.add_argument(
         "--remote",
@@ -455,9 +567,19 @@ def main() -> None:
             args.ang_vel_z = 0.0
 
     task_cfg, train_cfg = load_task_and_train_cfg(args.config)
+    if _is_go2_rough_play_task(task_cfg):
+        if args.lin_vel_x is None:
+            args.lin_vel_x = 0.5
+        if args.lin_vel_y is None:
+            args.lin_vel_y = 0.0
+        if args.ang_vel_z is None:
+            args.ang_vel_z = 0.0
     if args.local_terrain_map is not None:
         args.local_mujoco = True
-        _apply_local_terrain_map_override(task_cfg, args.local_terrain_map)
+        terrain_xml = args.local_terrain_map
+        if terrain_xml == "auto":
+            terrain_xml = DEFAULT_MJLAB_ROUGH_5X5_XML if _is_rough_play_task(task_cfg) else DEFAULT_PRIMITIVE_TERRAIN_XML
+        _apply_local_terrain_map_override(task_cfg, terrain_xml)
     _apply_fixed_play_command(
         task_cfg,
         lin_vel_x=args.lin_vel_x,
@@ -501,12 +623,23 @@ def main() -> None:
     )
     if enable_heading_arrow:
         task_cfg["debug_visualization"]["heading_arrow"]["auto_publish"] = not bool(args.no_command_arrow_auto_publish)
+    _apply_rough_terrain_visual_config(
+        task_cfg,
+        enabled=_is_rough_play_task(task_cfg) and not bool(args.no_rough_terrain_visual),
+        asset_path=args.rough_terrain_asset,
+        actor_name=args.rough_terrain_actor,
+        scale=args.rough_terrain_scale,
+        auto_publish=True,
+    )
+    _configure_rough_terrain_scene_actor(task_cfg, local_mujoco=bool(args.local_mujoco))
     _configure_debug_arrow_scene_actors(task_cfg, local_mujoco=bool(args.local_mujoco))
     apply_remote_override(task_cfg, args.remote)
     _apply_play_scene_mode(task_cfg, local_mujoco=bool(args.local_mujoco))
     task_cfg.setdefault("sim", {})["render_mode"] = "human"
     task_cfg["sim"]["headless"] = False
     check_orcagym_addresses(task_cfg)
+    _maybe_publish_rough_terrain_visual(task_cfg, local_mujoco=bool(args.local_mujoco))
+    _maybe_publish_command_arrow(task_cfg, local_mujoco=bool(args.local_mujoco))
 
     try:
         import torch
@@ -522,7 +655,15 @@ def main() -> None:
         from orca_rl.rsl_env.mjlab_policy import find_latest_unitree_mjlab_checkpoint
 
         project_root = Path(__file__).resolve().parents[1]
-        checkpoint = str(args.checkpoint or find_latest_unitree_mjlab_checkpoint(project_root, robot=robot_name or "g1"))
+        terrain_name = "rough" if _is_rough_play_task(task_cfg) else "flat"
+        checkpoint = str(
+            args.checkpoint
+            or find_latest_unitree_mjlab_checkpoint(
+                project_root,
+                robot=robot_name or "g1",
+                terrain=terrain_name,
+            )
+        )
     else:
         checkpoint = args.checkpoint or str(
             find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)

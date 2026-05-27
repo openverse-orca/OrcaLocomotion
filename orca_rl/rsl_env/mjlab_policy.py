@@ -197,14 +197,16 @@ def make_mjlab_orca_play_bridge(env: Any, *, expected_obs_dim: int, robot: str |
     raise ValueError(f"Unsupported Unitree/mjlab Orca play bridge robot: {robot_name!r}")
 
 
-def find_latest_unitree_mjlab_checkpoint(project_root: str | Path, *, robot: str = "g1") -> Path:
+def find_latest_unitree_mjlab_checkpoint(
+    project_root: str | Path,
+    *,
+    robot: str = "g1",
+    terrain: str | None = None,
+) -> Path:
     robot_name = str(robot).strip().lower()
+    terrain_name = str(terrain or "flat").strip().lower()
     project_root = Path(project_root).expanduser().resolve()
-    default_names = {
-        "g1": "test_model_G1_mjlab_Flat.pt",
-        "go2": "test_model_Go2_mjlab_Flat.pt",
-        "unitree_go2": "test_model_Go2_mjlab_Flat.pt",
-    }
+    default_names = _unitree_mjlab_default_checkpoint_names(terrain_name)
     candidate_paths = []
     default_name = default_names.get(robot_name)
     if default_name:
@@ -214,7 +216,10 @@ def find_latest_unitree_mjlab_checkpoint(project_root: str | Path, *, robot: str
                 project_root / default_name,
             ]
         )
-    candidates = [path for path in candidate_paths if path.exists()]
+    for path in candidate_paths:
+        if path.exists():
+            return path
+    candidates = []
     root = project_root / "third_party" / "unitree_rl_mjlab" / "logs" / "rsl_rl"
     candidates.extend(root.glob(f"{robot_name}_velocity/*/model_*.pt"))
     candidates = sorted(candidates, key=lambda path: path.stat().st_mtime)
@@ -222,10 +227,24 @@ def find_latest_unitree_mjlab_checkpoint(project_root: str | Path, *, robot: str
         searched = [str(path) for path in candidate_paths]
         searched.append(str(root / f"{robot_name}_velocity" / "*" / "model_*.pt"))
         raise FileNotFoundError(
-            f"Cannot find a Unitree/mjlab {robot_name.upper()} checkpoint under "
+            f"Cannot find a Unitree/mjlab {robot_name.upper()} {terrain_name} checkpoint under "
             f"{searched}. Pass --checkpoint explicitly after training."
         )
     return candidates[-1]
+
+
+def _unitree_mjlab_default_checkpoint_names(terrain: str) -> dict[str, str]:
+    if terrain == "rough":
+        return {
+            "g1": "test_model_G1_mjlab_Rough.pt",
+            "go2": "test_model_Go2_mjlab_Rough.pt",
+            "unitree_go2": "test_model_Go2_mjlab_Rough.pt",
+        }
+    return {
+        "g1": "test_model_G1_mjlab_Flat.pt",
+        "go2": "test_model_Go2_mjlab_Flat.pt",
+        "unitree_go2": "test_model_Go2_mjlab_Flat.pt",
+    }
 
 
 def _build_mlp(actor_state_dict: dict[str, torch.Tensor]) -> nn.Sequential:

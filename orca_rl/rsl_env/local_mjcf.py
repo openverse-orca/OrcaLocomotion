@@ -364,6 +364,9 @@ def _format_elevation(elevation: np.ndarray) -> str:
 def _prefix_named_elements(element: ET.Element, prefix: str, name_map: dict[str, str]) -> None:
     for child in element.iter():
         name = child.get("name")
+        if not name and child.tag == "freejoint":
+            name = "_joint_0"
+            child.set("name", name)
         if name:
             prefixed = f"{prefix}_{name}"
             name_map[name] = prefixed

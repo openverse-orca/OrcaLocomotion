@@ -12,7 +12,7 @@ from orca_gym.environment import OrcaGymLocalEnv
 from .action_mapper import ActionMapperConfig, ResidualJointTargetActionMapper
 from .curriculum import CommandConfig, FlatVelocityCommandSampler
 from .debug_visualizer import make_debug_arrow_visualizers
-from .math_utils import quat_mul_wxyz, yaw_quat_wxyz
+from .math_utils import quat_mul_wxyz, quat_wxyz_to_rotmat, yaw_quat_wxyz
 from .obs_builder import LocomotionObservationBuilder, LocomotionTaskState, ObservationConfig
 from .randomization import DomainRandomizer, RandomizationConfig, RandomizationState
 from .rendering import resolve_rendering
@@ -195,6 +195,8 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
     def render(self) -> None:
         for visualizer in getattr(self, "_debug_arrow_visualizers", []):
             visualizer.update()
+        if getattr(self, "model_xml_path", None):
+            return
         super().render()
 
     def debug_visualization_report(self) -> dict[str, Any]:
@@ -616,8 +618,105 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
             friction_scale=agent.randomization_state.friction_scale,
             base_mass_delta=agent.randomization_state.base_mass_delta,
             domain_randomization=self._randomization_observation(agent),
-            height_scan=agent.terrain_runtime.scan(base_qpos[:3], base_qpos[3:7]),
+            height_scan=self._query_height_scan(agent, base_qpos[:3], base_qpos[3:7]),
         )
+
+    def _query_height_scan(self, agent: _AgentRuntime, base_pos: np.ndarray, base_quat: np.ndarray) -> np.ndarray:
+        """Return mjlab-style vertical height scan from the live MuJoCo scene.
+
+        The rough Unitree/mjlab policies were trained from raycast hits, not from
+        an offline terrain table.  Prefer real MuJoCo raycasts so OrcaLab visual
+        or uploaded terrain geometry is the source of truth.  If a ray misses,
+        fall back to the configured heightfield for that sample.
+        """
+
+        scan_cfg = agent.terrain_runtime.scan_cfg
+        if not scan_cfg.enabled:
+            return np.zeros(0, dtype=np.float64)
+        scale = float(scan_cfg.scale)
+        fallback_scaled = agent.terrain_runtime.scan(base_pos, base_quat)
+        model = getattr(getattr(self, "gym", None), "_mjModel", None)
+        data = getattr(getattr(self, "gym", None), "_mjData", None)
+        if model is None or data is None or getattr(self, "_mjwarp_runtime", None) is not None:
+            return fallback_scaled
+        fallback = fallback_scaled / scale if abs(scale) > 1.0e-12 else fallback_scaled
+
+        samples = self._raycast_ground_truth_height_scan(
+            model=model,
+            data=data,
+            agent=agent,
+            base_pos=np.asarray(base_pos, dtype=np.float64),
+            base_quat=np.asarray(base_quat, dtype=np.float64),
+            fallback=fallback,
+        )
+        return samples * scale
+
+    def _raycast_ground_truth_height_scan(
+        self,
+        *,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        agent: _AgentRuntime,
+        base_pos: np.ndarray,
+        base_quat: np.ndarray,
+        fallback: np.ndarray,
+    ) -> np.ndarray:
+        scan_cfg = agent.terrain_runtime.scan_cfg
+        xs = np.arange(-scan_cfg.size[0] / 2.0, scan_cfg.size[0] / 2.0 + 0.5 * scan_cfg.resolution, scan_cfg.resolution)
+        ys = np.arange(-scan_cfg.size[1] / 2.0, scan_cfg.size[1] / 2.0 + 0.5 * scan_cfg.resolution, scan_cfg.resolution)
+        if fallback.size != xs.size * ys.size:
+            fallback = np.resize(fallback, xs.size * ys.size).astype(np.float64)
+
+        rot = quat_wxyz_to_rotmat(base_quat)
+        yaw = float(np.arctan2(float(rot[1, 0]), float(rot[0, 0])))
+        cos_yaw = float(np.cos(yaw))
+        sin_yaw = float(np.sin(yaw))
+        geomgroup = _height_scan_geomgroup(model, self.cfg)
+        bodyexclude = _agent_root_body_id(model, self.model, agent)
+        robot_geom_ids = _robot_geom_ids(model, agent)
+        saved_robot_groups = model.geom_group[robot_geom_ids].copy() if robot_geom_ids.size else None
+        if robot_geom_ids.size:
+            model.geom_group[robot_geom_ids] = 5
+            geomgroup[5] = 0
+        ray_dir = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        geomid = np.array([-1], dtype=np.int32)
+        heights = np.empty(xs.size * ys.size, dtype=np.float64)
+
+        try:
+            index = 0
+            for y in ys:
+                for x in xs:
+                    offset = np.array(
+                        [
+                            cos_yaw * float(x) - sin_yaw * float(y),
+                            sin_yaw * float(x) + cos_yaw * float(y),
+                            0.0,
+                        ],
+                        dtype=np.float64,
+                    )
+                    ray_start = np.array([base_pos[0] + offset[0], base_pos[1] + offset[1], base_pos[2]], dtype=np.float64)
+                    geomid[0] = -1
+                    distance = float(
+                        mujoco.mj_ray(
+                            model,
+                            data,
+                            ray_start,
+                            ray_dir,
+                            geomgroup,
+                            1,
+                            bodyexclude,
+                            geomid,
+                        )
+                    )
+                    if distance >= 0.0 and geomid[0] >= 0:
+                        heights[index] = float(base_pos[2]) - float(ray_start[2] - distance)
+                    else:
+                        heights[index] = float(fallback[index])
+                    index += 1
+        finally:
+            if robot_geom_ids.size and saved_robot_groups is not None:
+                model.geom_group[robot_geom_ids] = saved_robot_groups
+        return heights
 
     def _stack_observations(self, states: list[LocomotionTaskState], noisy: bool) -> dict[str, np.ndarray]:
         observations = [agent.obs_builder.build(state, noisy=noisy) for agent, state in zip(self.agents, states)]
@@ -958,3 +1057,61 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
     def _local_mujoco_model(self) -> Any | None:
         gym = getattr(self, "gym", None)
         return getattr(gym, "_mjModel", None)
+
+
+def _height_scan_geomgroup(model: mujoco.MjModel, cfg: dict[str, Any]) -> np.ndarray:
+    sensors = cfg.get("sensors", {})
+    sensor_cfg = sensors.get("terrain_scan") if isinstance(sensors, dict) else None
+    terrain_cfg = cfg.get("terrain", {})
+    groups = None
+    if isinstance(sensor_cfg, dict):
+        groups = sensor_cfg.get("include_geom_groups")
+    if groups is None and isinstance(terrain_cfg, dict):
+        groups = terrain_cfg.get("raycast_geom_groups")
+    if groups is None:
+        groups = (0,)
+    if isinstance(groups, int):
+        groups = (groups,)
+    geomgroup = np.zeros(6, dtype=np.uint8)
+    for group in groups:
+        group_id = int(group)
+        if 0 <= group_id < geomgroup.size:
+            geomgroup[group_id] = 1
+    if not np.any(geomgroup):
+        geomgroup[:] = 1
+    # If the loaded model has no geoms in the requested groups, fall back to all
+    # groups so converted OrcaLab assets with unknown group IDs can still be hit.
+    model_groups = np.asarray(model.geom_group[: model.ngeom], dtype=np.int32)
+    if not np.any(geomgroup[np.clip(model_groups, 0, geomgroup.size - 1)]):
+        geomgroup[:] = 1
+    return geomgroup
+
+
+def _agent_root_body_id(model: mujoco.MjModel, model_wrapper: Any, agent: _AgentRuntime) -> int:
+    try:
+        joint_dict = model_wrapper.get_joint_dict()
+        joint_info = joint_dict.get(agent.base_joint_name)
+        if joint_info is not None:
+            joint_id = int(joint_info["JointId"])
+        else:
+            joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, agent.base_joint_name)
+        if joint_id >= 0:
+            return int(model.jnt_bodyid[joint_id])
+    except Exception:
+        pass
+    return -1
+
+
+def _robot_geom_ids(model: mujoco.MjModel, agent: _AgentRuntime) -> np.ndarray:
+    robot_body_names = set(getattr(agent, "robot_body_names", set()))
+    if not robot_body_names:
+        return np.zeros(0, dtype=np.int32)
+    body_ids = set()
+    for body_name in robot_body_names:
+        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, str(body_name))
+        if body_id >= 0:
+            body_ids.add(int(body_id))
+    if not body_ids:
+        return np.zeros(0, dtype=np.int32)
+    geom_ids = [geom_id for geom_id in range(int(model.ngeom)) if int(model.geom_bodyid[geom_id]) in body_ids]
+    return np.asarray(geom_ids, dtype=np.int32)

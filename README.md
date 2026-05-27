@@ -232,7 +232,7 @@ GO2 scene binding / auto-publish 默认使用 OrcaLab 资产：
 assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda
 ```
 
-OrcaLab 可上传 primitive 地形资产：
+OrcaLab primitive XML 地形上传包：
 
 ```text
 smb://192.168.110.53/share/OrcaPrimitiveTerrainXml.zip
@@ -272,6 +272,65 @@ python -m orca_rl.run_play \
 
 `--local-terrain-map` 会自动打开 `--local-mujoco`，并把本地生成的 robot batch XML 地面替换成这份 OrcaLab 也能导入的 primitive terrain。注意这仍然是简化版静态地形，不是 mjlab 完整课程学习地形系统。
 
+MJLab rough 5x5 默认 OrcaLab 可视地形：
+
+```text
+assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+```
+
+`Unitree-G1-Rough` / `Unitree-GO2-Rough` 在 OrcaLab play 时会默认尝试发布这份视觉地形 actor，actor 名为 `mjlab_rough_5x5_terrain`，默认位置是 `[0, 0, 0.05]`。这只负责 OrcaLab 渲染侧；本地 MuJoCo collision 仍然使用项目里的 XML：
+
+```text
+assets/terrain/mjlab_rough_5x5_xml/terrain.xml
+assets/terrain/mjlab_rough_5x5_xml/terrain_height_field.npz
+assets/terrain/MjlabRough5x5Xml.zip
+```
+
+当前服务器上传包：
+
+```text
+smb://192.168.110.53/share/MjlabRough5x5Xml_20260527.zip
+```
+
+粗糙地形 play：
+
+```bash
+python -m orca_rl.run_play \
+  --config Unitree-Go2-Rough \
+  --policy-backend mjlab \
+  --checkpoint checkpoints/test_model_Go2_mjlab_Rough.pt \
+  --command-arrow
+```
+
+`Unitree-Go2-Rough` play 未显式传速度时会默认使用 `vx=0.5, vy=0.0, wz=0.0`。
+
+如果只想测试本地 MuJoCo collision，不往 OrcaLab 场景里发视觉地形：
+
+```bash
+python -m orca_rl.run_play \
+  --config Unitree-Go2-Rough \
+  --policy-backend mjlab \
+  --checkpoint checkpoints/test_model_Go2_mjlab_Rough.pt \
+  --local-terrain-map \
+  --no-rough-terrain-visual \
+  --lin-vel-x 0.5
+```
+
+如果使用 `--config Unitree-Go2-Rough --policy-backend mjlab` 但不显式传 `--checkpoint`，默认 checkpoint 会解析到：
+
+```text
+checkpoints/test_model_Go2_mjlab_Rough.pt
+```
+
+这份 Go2 rough policy 的 actor observation 是 234 维：47 维 flat proprioception + 187 维 height scan。187 来自当前 grid scan 配置 `(1.6, 1.0) / 0.1 -> 17 x 11`。
+
+Rough height scan 对齐规则：
+
+- scan 顺序对齐 mjlab `GridPatternCfg`：`y` 外层、`x` 内层，flatten 后 `x` 变化最快。
+- local MuJoCo runtime 优先用 `mj_ray` 从机器人 base 高度沿世界 `-Z` 方向打到当前场景几何，返回 `base_z - hit_z` 的真实高度差。
+- raycast 会临时排除机器人自身 geom，避免高度射线打到腿、机身或脚掌。
+- ray miss 时才 fallback 到 `terrain_height_field.npz`，所以 primitive terrain / OrcaLab 下发到 MuJoCo 的地面几何会成为优先真值。
+
 OrcaLab command arrow debug：
 
 ```bash
@@ -287,6 +346,22 @@ python -m orca_rl.run_play \
   --heading-arrow-scale 0.5 \
   --command-arrow-actor cmd_arrow_000
 ```
+
+Go2 rough terrain keyboard teleop：
+
+```bash
+./play_go2_primitive_keyboard.sh
+```
+
+默认会发布：
+
+```text
+assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+```
+
+默认使用 `Unitree-Go2-Rough` 和 `checkpoints/test_model_Go2_mjlab_Rough.pt`。按键和 G1 键盘脚本一致：方向键 / keypad 8/2/4/6 控制 vx/vy，Z/C 或 keypad 7/9 控制 yaw，Space/5 归零，Q 退出。
+
+本地 `assets/` 只保留运行和上传还在使用的文件：debug arrow 源包、primitive XML 地形、mjlab rough XML 地形、multi-terrain collision XML/hfield。旧的 mjlab rough USDZ 本地备份和 multi-terrain USDA/USDZ 备份已清理，运行时使用 OrcaLab asset path 或 XML collision 源。
 
 `--command-arrow` 默认会在机器人 auto-publish 时把正式 OrcaLab 箭头资产同批发布进 scene，避免单独发布箭头覆盖现有机器人场景：
 

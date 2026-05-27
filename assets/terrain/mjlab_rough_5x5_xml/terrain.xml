@@ -1,0 +1,148 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="mjlab_rough_5x5_terrain">
+  <option gravity="0 0 -9.81" timestep="0.005" />
+  <asset>
+    <material name="tile_mat" rgba="0.45 0.47 0.42 1" />
+    <material name="floor_mat" rgba="0.30 0.32 0.31 1" />
+  </asset>
+  <worldbody>
+    <light name="terrain_light" pos="3 -4 8" dir="-0.4 0.4 -1" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2" />
+    <geom name="terrain_floor" type="plane" pos="4.8 0 0" size="9 8 0.02" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="floor_mat" />
+    <geom name="terrain_r0_c0_base" type="box" pos="0 -4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.48 0.52 0.46 1" />
+    <geom name="terrain_r0_c1_base" type="box" pos="0 -2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.48 0.52 0.46 1" />
+    <geom name="terrain_r0_c2_base" type="box" pos="0 0 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.48 0.52 0.46 1" />
+    <geom name="terrain_r0_c3_base" type="box" pos="0 2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.48 0.52 0.46 1" />
+    <geom name="terrain_r0_c4_base" type="box" pos="0 4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.48 0.52 0.46 1" />
+    <geom name="terrain_r1_c0_base" type="box" pos="2.4 -4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.50 0.44 1" />
+    <geom name="terrain_r1_c1_base" type="box" pos="2.4 -2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.50 0.44 1" />
+    <geom name="terrain_r1_c2_base" type="box" pos="2.4 0 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.50 0.44 1" />
+    <geom name="terrain_r1_c3_base" type="box" pos="2.4 2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.50 0.44 1" />
+    <geom name="terrain_r1_c4_base" type="box" pos="2.4 4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.50 0.44 1" />
+    <geom name="terrain_r2_c0_base" type="box" pos="4.8 -4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.44 0.48 0.42 1" />
+    <geom name="terrain_r2_c1_base" type="box" pos="4.8 -2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.44 0.48 0.42 1" />
+    <geom name="terrain_r2_c2_base" type="box" pos="4.8 0 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.44 0.48 0.42 1" />
+    <geom name="terrain_r2_c3_base" type="box" pos="4.8 2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.44 0.48 0.42 1" />
+    <geom name="terrain_r2_c4_base" type="box" pos="4.8 4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.44 0.48 0.42 1" />
+    <geom name="terrain_r3_c0_base" type="box" pos="7.2 -4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.46 0.40 1" />
+    <geom name="terrain_r3_c1_base" type="box" pos="7.2 -2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.46 0.40 1" />
+    <geom name="terrain_r3_c2_base" type="box" pos="7.2 0 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.46 0.40 1" />
+    <geom name="terrain_r3_c3_base" type="box" pos="7.2 2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.46 0.40 1" />
+    <geom name="terrain_r3_c4_base" type="box" pos="7.2 4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.46 0.40 1" />
+    <geom name="terrain_r4_c0_base" type="box" pos="9.6 -4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.44 0.38 1" />
+    <geom name="terrain_r4_c1_base" type="box" pos="9.6 -2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.44 0.38 1" />
+    <geom name="terrain_r4_c2_base" type="box" pos="9.6 0 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.44 0.38 1" />
+    <geom name="terrain_r4_c3_base" type="box" pos="9.6 2.4 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.44 0.38 1" />
+    <geom name="terrain_r4_c4_base" type="box" pos="9.6 4.8 0.01" size="1 1 0.01" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.44 0.38 1" />
+    <geom name="terrain_r1_c0_low_block_0_0" type="box" pos="1.85 -5.35 0.03125" size="0.22 0.22 0.01125" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c0_low_block_0_2" type="box" pos="1.85 -4.25 0.03875" size="0.22 0.22 0.01875" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c0_low_block_1_1" type="box" pos="2.4 -4.8 0.035" size="0.22 0.22 0.015" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c0_low_block_1_2" type="box" pos="2.4 -4.25 0.0275" size="0.22 0.22 0.0075" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c0_low_block_2_0" type="box" pos="2.95 -5.35 0.03875" size="0.22 0.22 0.01875" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c0_low_block_2_1" type="box" pos="2.95 -4.8 0.0275" size="0.22 0.22 0.0075" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c1_low_block_0_0" type="box" pos="1.85 -2.95 0.03305" size="0.22 0.22 0.01305" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c1_low_block_0_2" type="box" pos="1.85 -1.85 0.04175" size="0.22 0.22 0.02175" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c1_low_block_1_1" type="box" pos="2.4 -2.4 0.0374" size="0.22 0.22 0.0174" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c1_low_block_1_2" type="box" pos="2.4 -1.85 0.0287" size="0.22 0.22 0.0087" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c1_low_block_2_0" type="box" pos="2.95 -2.95 0.04175" size="0.22 0.22 0.02175" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c1_low_block_2_1" type="box" pos="2.95 -2.4 0.0287" size="0.22 0.22 0.0087" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c2_low_block_0_0" type="box" pos="1.85 -0.55 0.03485" size="0.22 0.22 0.01485" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c2_low_block_0_2" type="box" pos="1.85 0.55 0.04475" size="0.22 0.22 0.02475" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c2_low_block_1_1" type="box" pos="2.4 0 0.0398" size="0.22 0.22 0.0198" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c2_low_block_1_2" type="box" pos="2.4 0.55 0.0299" size="0.22 0.22 0.0099" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c2_low_block_2_0" type="box" pos="2.95 -0.55 0.04475" size="0.22 0.22 0.02475" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c2_low_block_2_1" type="box" pos="2.95 0 0.0299" size="0.22 0.22 0.0099" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c3_low_block_0_0" type="box" pos="1.85 1.85 0.03665" size="0.22 0.22 0.01665" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c3_low_block_0_2" type="box" pos="1.85 2.95 0.04775" size="0.22 0.22 0.02775" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c3_low_block_1_1" type="box" pos="2.4 2.4 0.0422" size="0.22 0.22 0.0222" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c3_low_block_1_2" type="box" pos="2.4 2.95 0.0311" size="0.22 0.22 0.0111" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c3_low_block_2_0" type="box" pos="2.95 1.85 0.04775" size="0.22 0.22 0.02775" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c3_low_block_2_1" type="box" pos="2.95 2.4 0.0311" size="0.22 0.22 0.0111" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c4_low_block_0_0" type="box" pos="1.85 4.25 0.03845" size="0.22 0.22 0.01845" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c4_low_block_0_2" type="box" pos="1.85 5.35 0.05075" size="0.22 0.22 0.03075" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c4_low_block_1_1" type="box" pos="2.4 4.8 0.0446" size="0.22 0.22 0.0246" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c4_low_block_1_2" type="box" pos="2.4 5.35 0.0323" size="0.22 0.22 0.0123" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c4_low_block_2_0" type="box" pos="2.95 4.25 0.05075" size="0.22 0.22 0.03075" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r1_c4_low_block_2_1" type="box" pos="2.95 4.8 0.0323" size="0.22 0.22 0.0123" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r2_c0_low_block_0_0" type="box" pos="4.25 -5.35 0.03725" size="0.22 0.22 0.01725" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r2_c0_low_block_0_2" type="box" pos="4.25 -4.25 0.04875" size="0.22 0.22 0.02875" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r2_c0_low_block_1_1" type="box" pos="4.8 -4.8 0.043" size="0.22 0.22 0.023" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r2_c0_low_block_1_2" type="box" pos="4.8 -4.25 0.0315" size="0.22 0.22 0.0115" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r2_c0_low_block_2_0" type="box" pos="5.35 -5.35 0.04875" size="0.22 0.22 0.02875" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r2_c0_low_block_2_1" type="box" pos="5.35 -4.8 0.0315" size="0.22 0.22 0.0115" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.46 0.48 0.40 1" />
+    <geom name="terrain_r2_c1_rough_block_0_0" type="box" pos="4.08 -3.12 0.0285" size="0.16 0.16 0.0085" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_0_1" type="box" pos="4.08 -2.64 0.05825" size="0.16 0.16 0.03825" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_0_3" type="box" pos="4.08 -1.68 0.0455" size="0.16 0.16 0.0255" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_1_0" type="box" pos="4.56 -3.12 0.04975" size="0.16 0.16 0.02975" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_1_2" type="box" pos="4.56 -2.16 0.06675" size="0.16 0.16 0.04675" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_1_3" type="box" pos="4.56 -1.68 0.03275" size="0.16 0.16 0.01275" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_2_1" type="box" pos="5.04 -2.64 0.071" size="0.16 0.16 0.051" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_2_2" type="box" pos="5.04 -2.16 0.037" size="0.16 0.16 0.017" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_2_3" type="box" pos="5.04 -1.68 0.054" size="0.16 0.16 0.034" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_3_0" type="box" pos="5.52 -3.12 0.0455" size="0.16 0.16 0.0255" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_3_1" type="box" pos="5.52 -2.64 0.03275" size="0.16 0.16 0.01275" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c1_rough_block_3_2" type="box" pos="5.52 -2.16 0.0625" size="0.16 0.16 0.0425" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r2_c2_wave_0" type="box" pos="4 0 0.06" size="0.05 0.9 0.04" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r2_c2_wave_1" type="box" pos="4.4 0 0.042" size="0.05 0.9 0.022" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r2_c2_wave_2" type="box" pos="4.8 0 0.06" size="0.05 0.9 0.04" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r2_c2_wave_3" type="box" pos="5.2 0 0.042" size="0.05 0.9 0.022" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r2_c2_wave_4" type="box" pos="5.6 0 0.06" size="0.05 0.9 0.04" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r2_c3_ramp" type="box" pos="4.8 2.4 0.08" size="0.92 0.88 0.05" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.44 0.43 0.35 1" quat="0.997564 0 0.0697565 0" />
+    <geom name="terrain_r2_c4_gap_left" type="box" pos="4.25 4.8 0.07" size="0.28 0.9 0.05" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.39 0.34 1" />
+    <geom name="terrain_r2_c4_gap_right" type="box" pos="5.35 4.8 0.07" size="0.28 0.9 0.05" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.39 0.34 1" />
+    <geom name="terrain_r3_c0_rough_block_0_0" type="box" pos="6.48 -5.52 0.0315" size="0.16 0.16 0.0115" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_0_1" type="box" pos="6.48 -5.04 0.07175" size="0.16 0.16 0.05175" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_0_3" type="box" pos="6.48 -4.08 0.0545" size="0.16 0.16 0.0345" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_1_0" type="box" pos="6.96 -5.52 0.06025" size="0.16 0.16 0.04025" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_1_2" type="box" pos="6.96 -4.56 0.08325" size="0.16 0.16 0.06325" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_1_3" type="box" pos="6.96 -4.08 0.03725" size="0.16 0.16 0.01725" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_2_1" type="box" pos="7.44 -5.04 0.089" size="0.16 0.16 0.069" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_2_2" type="box" pos="7.44 -4.56 0.043" size="0.16 0.16 0.023" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_2_3" type="box" pos="7.44 -4.08 0.066" size="0.16 0.16 0.046" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_3_0" type="box" pos="7.92 -5.52 0.0545" size="0.16 0.16 0.0345" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_3_1" type="box" pos="7.92 -5.04 0.03725" size="0.16 0.16 0.01725" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c0_rough_block_3_2" type="box" pos="7.92 -4.56 0.0775" size="0.16 0.16 0.0575" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r3_c1_stair_0" type="box" pos="6.4 -2.4 0.0375" size="0.19 0.9 0.0175" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r3_c1_stair_1" type="box" pos="6.8 -2.4 0.055" size="0.19 0.9 0.035" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r3_c1_stair_2" type="box" pos="7.2 -2.4 0.0725" size="0.19 0.9 0.0525" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r3_c1_stair_3" type="box" pos="7.6 -2.4 0.09" size="0.19 0.9 0.07" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r3_c1_stair_4" type="box" pos="8 -2.4 0.1075" size="0.19 0.9 0.0875" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r3_c2_ramp" type="box" pos="7.2 0 0.08" size="0.92 0.88 0.05" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.44 0.43 0.35 1" quat="0.996195 0 -0.0871557 0" />
+    <geom name="terrain_r3_c3_wave_0" type="box" pos="6.4 2.4 0.085" size="0.05 0.9 0.065" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r3_c3_wave_1" type="box" pos="6.8 2.4 0.05575" size="0.05 0.9 0.03575" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r3_c3_wave_2" type="box" pos="7.2 2.4 0.085" size="0.05 0.9 0.065" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r3_c3_wave_3" type="box" pos="7.6 2.4 0.05575" size="0.05 0.9 0.03575" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r3_c3_wave_4" type="box" pos="8 2.4 0.085" size="0.05 0.9 0.065" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r3_c4_stone_0" type="box" pos="6.65 4.35 0.08" size="0.26 0.22 0.06" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r3_c4_stone_1" type="box" pos="7.05 5.15 0.09" size="0.26 0.22 0.07" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r3_c4_stone_2" type="box" pos="7.55 4.6 0.08" size="0.26 0.22 0.06" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r3_c4_stone_3" type="box" pos="7.92 5.32 0.09" size="0.26 0.22 0.07" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r4_c0_stair_0" type="box" pos="8.8 -4.8 0.045" size="0.19 0.9 0.025" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r4_c0_stair_1" type="box" pos="9.2 -4.8 0.07" size="0.19 0.9 0.05" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r4_c0_stair_2" type="box" pos="9.6 -4.8 0.095" size="0.19 0.9 0.075" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r4_c0_stair_3" type="box" pos="10 -4.8 0.12" size="0.19 0.9 0.1" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r4_c0_stair_4" type="box" pos="10.4 -4.8 0.145" size="0.19 0.9 0.125" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.42 0.42 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_0_0" type="box" pos="8.88 -3.12 0.0345" size="0.16 0.16 0.0145" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_0_1" type="box" pos="8.88 -2.64 0.08525" size="0.16 0.16 0.06525" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_0_3" type="box" pos="8.88 -1.68 0.0635" size="0.16 0.16 0.0435" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_1_0" type="box" pos="9.36 -3.12 0.07075" size="0.16 0.16 0.05075" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_1_2" type="box" pos="9.36 -2.16 0.09975" size="0.16 0.16 0.07975" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_1_3" type="box" pos="9.36 -1.68 0.04175" size="0.16 0.16 0.02175" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_2_1" type="box" pos="9.84 -2.64 0.107" size="0.16 0.16 0.087" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_2_2" type="box" pos="9.84 -2.16 0.049" size="0.16 0.16 0.029" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_2_3" type="box" pos="9.84 -1.68 0.078" size="0.16 0.16 0.058" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_3_0" type="box" pos="10.32 -3.12 0.0635" size="0.16 0.16 0.0435" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_3_1" type="box" pos="10.32 -2.64 0.04175" size="0.16 0.16 0.02175" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c1_rough_block_3_2" type="box" pos="10.32 -2.16 0.0925" size="0.16 0.16 0.0725" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.39 0.45 0.36 1" />
+    <geom name="terrain_r4_c2_stone_0" type="box" pos="9.05 -0.45 0.1" size="0.26 0.22 0.08" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r4_c2_stone_1" type="box" pos="9.45 0.35 0.11" size="0.26 0.22 0.09" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r4_c2_stone_2" type="box" pos="9.95 -0.2 0.1" size="0.26 0.22 0.08" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r4_c2_stone_3" type="box" pos="10.32 0.52 0.11" size="0.26 0.22 0.09" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.37 0.40 0.34 1" />
+    <geom name="terrain_r4_c3_gap_left" type="box" pos="9.05 2.4 0.1" size="0.28 0.9 0.08" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.39 0.34 1" />
+    <geom name="terrain_r4_c3_gap_right" type="box" pos="10.15 2.4 0.1" size="0.28 0.9 0.08" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.39 0.34 1" />
+    <geom name="terrain_r4_c4_wave_0" type="box" pos="8.8 4.8 0.11" size="0.05 0.9 0.09" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r4_c4_wave_1" type="box" pos="9.2 4.8 0.0695" size="0.05 0.9 0.0495" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r4_c4_wave_2" type="box" pos="9.6 4.8 0.11" size="0.05 0.9 0.09" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r4_c4_wave_3" type="box" pos="10 4.8 0.0695" size="0.05 0.9 0.0495" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+    <geom name="terrain_r4_c4_wave_4" type="box" pos="10.4 4.8 0.11" size="0.05 0.9 0.09" friction="0.9 0.005 0.0001" contype="1" conaffinity="1" material="tile_mat" rgba="0.40 0.46 0.38 1" />
+  </worldbody>
+</mujoco>

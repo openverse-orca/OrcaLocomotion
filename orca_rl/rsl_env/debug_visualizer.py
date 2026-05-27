@@ -302,12 +302,63 @@ def ensure_command_arrow_actor(
             Actor(
                 name=actor_name,
                 asset_path=asset_path.replace("//", "/"),
-                position=np.array([0.0, 0.0, 0.6], dtype=np.float64),
+                position=np.array([0.0, 0.0, 1.1], dtype=np.float64),
                 rotation=euler2quat([0.0, 0.0, 0.0]),
                 scale=1.0,
             )
         )
         scene.publish_scene()
+        time.sleep(0.2)
+        scene.publish_scene()
+    finally:
+        scene.close()
+    time.sleep(1.0)
+    return True
+
+
+def ensure_scene_actor(
+    *,
+    orcagym_addr: str,
+    actor_name: str,
+    asset_path: str,
+    position: list[float] | tuple[float, float, float] | np.ndarray = (0.0, 0.0, 0.0),
+    rotation_euler: list[float] | tuple[float, float, float] = (0.0, 0.0, 0.0),
+    scale: float = 1.0,
+    publish_twice: bool = True,
+) -> bool:
+    """Publish a generic visual actor when it is not already in the OrcaLab scene."""
+
+    from orca_gym.scene.orca_gym_scene import Actor, OrcaGymScene
+    from orca_gym.utils.rotations import euler2quat
+
+    from .model_scanner import probe_scene_model
+
+    scene_names = probe_scene_model(orcagym_addr=orcagym_addr, time_step=0.005)
+    actor_key = actor_name.lower()
+    existing_names = set().union(
+        scene_names.joints,
+        scene_names.bodies,
+        scene_names.sites,
+        scene_names.sensors,
+    )
+    if any(actor_key in name.lower() for name in existing_names):
+        return False
+
+    scene = OrcaGymScene(orcagym_addr)
+    try:
+        scene.add_actor(
+            Actor(
+                name=actor_name,
+                asset_path=asset_path.replace("//", "/"),
+                position=np.asarray(position, dtype=np.float64),
+                rotation=euler2quat(rotation_euler),
+                scale=float(scale),
+            )
+        )
+        scene.publish_scene()
+        if publish_twice:
+            time.sleep(0.2)
+            scene.publish_scene()
     finally:
         scene.close()
     time.sleep(1.0)

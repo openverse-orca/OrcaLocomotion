@@ -31,6 +31,7 @@ def _apply_go2_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> Locomotion
         "spawn_if_missing": False,
         "max_auto_spawn_count": 1,
         "spawn_agent_name": "go2_000",
+        "spawn_height": 0.05,
         "asset_path": GO2_AGENT_ASSET_PATH,
     }
     if cfg.terrain is not None and cfg.terrain.terrain_type == "plane":
