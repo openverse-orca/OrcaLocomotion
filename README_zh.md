@@ -29,6 +29,9 @@ conda activate orca_rl
 pip install -r requirements.txt
 ```
 
+> **OrcaLab 前置条件：** 回放需要在 OrcaLab 中订阅 `unitree_robots` 资产。
+> 本项目使用的 GO2 和 G1 机器人预制件均来自该资产包。
+
 ## 训练
 
 使用捆绑的 Unitree/mjlab 项目进行训练。以下命令以无头模式运行 mjlab

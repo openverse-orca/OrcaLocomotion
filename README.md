@@ -31,6 +31,9 @@ conda activate orca_rl
 pip install -r requirements.txt
 ```
 
+> **OrcaLab prerequisite:** Playback requires the `unitree_robots` asset subscribed
+> in OrcaLab. The project uses the GO2 and G1 robot prefabs from this asset package.
+
 ## Training
 
 Train with the bundled Unitree/mjlab project. These commands run the native
