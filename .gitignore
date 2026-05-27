@@ -11,7 +11,5 @@ logs/
 runs/
 wandb/
 *.pt
-!checkpoints/
-!checkpoints/test_model_G1_mjlab_Flat.pt
-!checkpoints/test_model_Go2_mjlab_Flat.pt
 *.onnx
+*.csv
