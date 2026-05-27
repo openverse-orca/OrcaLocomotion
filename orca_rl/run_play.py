@@ -210,6 +210,19 @@ def _set_env_manual_command(env, command: np.ndarray) -> None:
                 agent.command = command.copy()
 
 
+def _fixed_command_vector(args: argparse.Namespace) -> np.ndarray | None:
+    if args.lin_vel_x is None and args.lin_vel_y is None and args.ang_vel_z is None:
+        return None
+    return np.array(
+        [
+            0.0 if args.lin_vel_x is None else float(args.lin_vel_x),
+            0.0 if args.lin_vel_y is None else float(args.lin_vel_y),
+            0.0 if args.ang_vel_z is None else float(args.ang_vel_z),
+        ],
+        dtype=np.float64,
+    )
+
+
 def _apply_command_arrow_debug_config(
     task_cfg: dict,
     *,
@@ -693,8 +706,11 @@ def main() -> None:
                     f"config_robot={robot_name or 'unknown'}"
                 )
             bridge = make_mjlab_orca_play_bridge(env, expected_obs_dim=policy.input_dim, robot=robot_name)
+            fixed_command = _fixed_command_vector(args)
             if args.command_sweep:
                 _set_env_manual_command(env, _command_sweep_vector(args, sim_time=0.0))
+            elif fixed_command is not None:
+                _set_env_manual_command(env, fixed_command)
             obs = bridge.get_observations()
             alignment = bridge.alignment_report
             print(
