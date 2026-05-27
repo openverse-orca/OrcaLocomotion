@@ -110,7 +110,7 @@ def main() -> None:
             checkpoint=str(checkpoint),
         )
         policy = MjlabRslRlActorPolicy.from_checkpoint(checkpoint, device=device)
-        bridge = make_mjlab_orca_play_bridge(env, expected_obs_dim=policy.input_dim, robot="g1", g1_arm_mode="policy")
+        bridge = make_mjlab_orca_play_bridge(env, expected_obs_dim=policy.input_dim, robot="g1")
 
         frame = _load_csv_frame(args.csv, args.row)
         if args.apply_csv_initial_state:

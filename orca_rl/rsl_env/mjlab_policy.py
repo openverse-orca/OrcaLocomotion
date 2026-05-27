@@ -66,8 +66,6 @@ class MjlabG1ActionSpec:
     armature: np.ndarray
     frictionloss: np.ndarray
     joint_limits: np.ndarray
-    neutral_qpos: np.ndarray
-    arm_joint_mask: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -85,12 +83,9 @@ class MjlabGo2ActionSpec:
 class MjlabG1OrcaPlayBridge:
     """Build mjlab G1 observations and apply mjlab G1 actions inside Orca envs."""
 
-    def __init__(self, env: Any, *, expected_obs_dim: int, arm_mode: str = "neutral") -> None:
+    def __init__(self, env: Any, *, expected_obs_dim: int) -> None:
         self.env = env
         self.expected_obs_dim = int(expected_obs_dim)
-        self.arm_mode = str(arm_mode)
-        if self.arm_mode not in {"neutral", "policy"}:
-            raise ValueError(f"Unsupported G1 arm mode: {arm_mode!r}")
         if self.expected_obs_dim < 98:
             raise ValueError(
                 "Unitree/mjlab G1 actor observations are at least 98-D "
@@ -129,7 +124,7 @@ class MjlabG1OrcaPlayBridge:
         start = 0
         for task in self.env.tasks:
             stop = start + task.num_envs
-            _step_task_with_mjlab_g1_actions(task, actions[start:stop], self.action_spec, arm_mode=self.arm_mode)
+            _step_task_with_mjlab_g1_actions(task, actions[start:stop], self.action_spec)
             self.env.episode_length_buf[start:stop] = torch.as_tensor(
                 task.episode_lengths,
                 dtype=torch.long,
@@ -193,16 +188,10 @@ class MjlabGo2OrcaPlayBridge:
         return self.get_observations()
 
 
-def make_mjlab_orca_play_bridge(
-    env: Any,
-    *,
-    expected_obs_dim: int,
-    robot: str | None = None,
-    g1_arm_mode: str = "neutral",
-) -> Any:
+def make_mjlab_orca_play_bridge(env: Any, *, expected_obs_dim: int, robot: str | None = None) -> Any:
     robot_name = (robot or _infer_robot_name(env)).strip().lower()
     if robot_name == "g1":
-        return MjlabG1OrcaPlayBridge(env, expected_obs_dim=expected_obs_dim, arm_mode=g1_arm_mode)
+        return MjlabG1OrcaPlayBridge(env, expected_obs_dim=expected_obs_dim)
     if robot_name in {"go2", "unitree_go2"}:
         return MjlabGo2OrcaPlayBridge(env, expected_obs_dim=expected_obs_dim)
     raise ValueError(f"Unsupported Unitree/mjlab Orca play bridge robot: {robot_name!r}")
@@ -428,13 +417,7 @@ def _count_mjlab_imu_gyro_sensors(task: Any) -> int:
     return count
 
 
-def _step_task_with_mjlab_g1_actions(
-    task: Any,
-    actions: np.ndarray,
-    spec: MjlabG1ActionSpec,
-    *,
-    arm_mode: str,
-) -> None:
+def _step_task_with_mjlab_g1_actions(task: Any, actions: np.ndarray, spec: MjlabG1ActionSpec) -> None:
     actions = np.asarray(actions, dtype=np.float64).reshape(task.num_envs, task.num_actions)
     task._resample_commands()
     for index, agent in enumerate(task.agents):
@@ -442,8 +425,6 @@ def _step_task_with_mjlab_g1_actions(
         agent.last_action = actions[index].copy()
 
     target_qpos = task._nominal_qpos + actions * spec.scale.reshape(1, -1)
-    if arm_mode == "neutral" and np.any(spec.arm_joint_mask):
-        target_qpos[:, spec.arm_joint_mask] = spec.neutral_qpos[spec.arm_joint_mask]
 
     task.ctrl[:] = 0.0
     if getattr(task, "_mjlab_position_actuator_aligned", False):
@@ -576,8 +557,6 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
         armature=armature,
         frictionloss=frictionloss,
         joint_limits=joint_limits,
-        neutral_qpos=np.zeros(len(joint_names), dtype=np.float64),
-        arm_joint_mask=np.asarray([_is_g1_arm_joint(joint_name) for joint_name in joint_names], dtype=bool),
     )
 
 
@@ -638,10 +617,6 @@ def _load_mjlab_g1_joint_limits(g1_constants: Any, joint_names: list[str]) -> np
             raise ValueError(f"Cannot find Unitree/mjlab G1 joint in source XML: {joint_name}")
         limits[index] = np.asarray(model.jnt_range[joint_id], dtype=np.float64)
     return limits
-
-
-def _is_g1_arm_joint(joint_name: str) -> bool:
-    return any(part in str(joint_name) for part in ("shoulder", "elbow", "wrist"))
 
 
 def _load_mjlab_go2_joint_limits(go2_constants: Any, joint_names: list[str]) -> np.ndarray:
