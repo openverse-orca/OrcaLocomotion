@@ -1,6 +1,6 @@
-# Orca RL
+# OrcaLocomotion
 
-Orca RL is an OrcaLab training extension for Unitree robot locomotion policies.
+OrcaLocomotion is an OrcaLab training extension for Unitree robot locomotion policies.
 Train policies and play them back in OrcaLab.
 
 ## Supported Tasks
@@ -17,8 +17,8 @@ Ubuntu 22.04 with an NVIDIA GPU is recommended for training. A display is only
 needed when playing policies in OrcaLab.
 
 ```bash
-git clone https://github.com/BenHuHuan/orca_rl.git
-cd orca_rl
+git clone https://github.com/openverse-orca/OrcaLocomotion.git
+cd OrcaLocomotion
 
 # System dependencies for building bundled C++ extensions
 sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
@@ -45,7 +45,7 @@ python scripts/train.py Unitree-Go2-Rough --env.scene.num-envs=4096
 python scripts/train.py Unitree-G1-Flat --env.scene.num-envs=4096
 ```
 
-The resulting checkpoints can be passed to Orca RL playback.
+The resulting checkpoints can be passed to OrcaLocomotion playback.
 
 ## Playback
 
@@ -60,7 +60,7 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 Use a checkpoint produced by the Unitree/mjlab training step.
 
 > **Note:** `Unitree-Go2-Rough` requires a terrain asset subscription in OrcaLab.
-> To request additional asset imports, please [open an issue](https://github.com/BenHuHuan/orca_rl/issues).
+> To request additional asset imports, please [open an issue](https://github.com/openverse-orca/OrcaLocomotion/issues).
 
 ## Assets
 

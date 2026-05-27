@@ -1,6 +1,6 @@
-# Orca RL
+# OrcaLocomotion
 
-Orca RL 是 OrcaLab 的训练扩展组件，支持训练 Unitree 机器人的运动控制策略，
+OrcaLocomotion 是 OrcaLab 的训练扩展组件，支持训练 Unitree 机器人的运动控制策略，
 并可在 OrcaLab 中播放训练好的策略。
 
 ## 支持的任务
@@ -16,8 +16,8 @@ Orca RL 是 OrcaLab 的训练扩展组件，支持训练 Unitree 机器人的运
 推荐使用 Ubuntu 22.04 + NVIDIA GPU 进行训练。仅在 OrcaLab 中回放策略时需要显示器。
 
 ```bash
-git clone https://github.com/BenHuHuan/orca_rl.git
-cd orca_rl
+git clone https://github.com/openverse-orca/OrcaLocomotion.git
+cd OrcaLocomotion
 
 # 编译 C++ 扩展所需的系统依赖
 sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
@@ -43,7 +43,7 @@ python scripts/train.py Unitree-Go2-Rough --env.scene.num-envs=4096
 python scripts/train.py Unitree-G1-Flat --env.scene.num-envs=4096
 ```
 
-训练产出的 checkpoint 可用于 Orca RL 回放。
+训练产出的 checkpoint 可用于 OrcaLocomotion 回放。
 
 ## 回放
 
@@ -58,7 +58,7 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 使用 Unitree/mjlab 训练步骤产出的 checkpoint。
 
 > **注意：** `Unitree-Go2-Rough` 需要在 OrcaLab 中订阅地形资产。如需导入额外资产，
-> 请 [提交 issue](https://github.com/BenHuHuan/orca_rl/issues)。
+> 请 [提交 issue](https://github.com/openverse-orca/OrcaLocomotion/issues)。
 
 ## 资产
 
