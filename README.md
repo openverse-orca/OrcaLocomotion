@@ -22,6 +22,9 @@ needed when playing policies in OrcaLab.
 git clone https://github.com/BenHuHuan/orca_rl.git
 cd orca_rl
 
+# System dependencies for building bundled C++ extensions
+sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
+
 conda create -n orca_rl python=3.11
 conda activate orca_rl
 
