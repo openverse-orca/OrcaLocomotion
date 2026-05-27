@@ -73,5 +73,5 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 
 ## 致谢
 
-训练任务和机器人资产基于 [mujocolab/mjlab](https://github.com/mujocolab/mjlab)
-和捆绑的 [unitree_rl_mjlab](https://github.com/unitreerobotics/unitree_rl_mjlab) 项目，用户可自行替换为其他第三方训练库。
+训练任务和机器人资产参考 [unitree_rl_mjlab](https://github.com/unitreerobotics/unitree_rl_mjlab)
+项目构建，并使用 [mujocolab/mjlab](https://github.com/mujocolab/mjlab) 作为训练后端。
