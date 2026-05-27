@@ -55,6 +55,9 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 
 使用 Unitree/mjlab 训练步骤产出的 checkpoint。
 
+> **注意：** `Unitree-Go2-Rough` 需要在 OrcaLab 中订阅地形资产。如需导入额外资产，
+> 请 [提交 issue](https://github.com/BenHuHuan/orca_rl/issues)。
+
 ## 资产
 
 在地形回放前，将 XML 地形文件上传到 OrcaLab：

@@ -58,6 +58,9 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 
 Use a checkpoint produced by the Unitree/mjlab training step.
 
+> **Note:** `Unitree-Go2-Rough` requires a terrain asset subscription in OrcaLab.
+> To request additional asset imports, please [open an issue](https://github.com/BenHuHuan/orca_rl/issues).
+
 ## Assets
 
 Upload the XML terrain files to OrcaLab before using terrain playback:
