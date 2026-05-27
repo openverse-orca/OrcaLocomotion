@@ -651,7 +651,7 @@ def _g1_dangling_arm_qpos(joint_names: list[str], joint_limits: np.ndarray) -> n
     for index, joint_name in enumerate(joint_names):
         if "elbow" in str(joint_name):
             low, high = np.asarray(joint_limits[index], dtype=np.float64)
-            qpos[index] = float(np.clip(1.0, low, high))
+            qpos[index] = float(np.clip(-1.0, low, high))
     return qpos
 
 
