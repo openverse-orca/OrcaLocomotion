@@ -68,7 +68,7 @@ Upload the XML terrain files to OrcaLab before using terrain playback:
 
 | Asset | Use |
 | --- | --- |
-| `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | Primitive XML terrain smoke tests |
+| `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | Terrain testing |
 | `assets/terrain/mjlab_rough_5x5_xml/terrain.xml` | Go2 rough terrain playback |
 
 Upload them in OrcaLab's XML asset upload flow.

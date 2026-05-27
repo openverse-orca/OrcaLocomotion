@@ -66,7 +66,7 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 
 | 资产 | 用途 |
 | --- | --- |
-| `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | 基础 XML 地形冒烟测试 |
+| `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | 地形测试 |
 | `assets/terrain/mjlab_rough_5x5_xml/terrain.xml` | Go2 粗糙地形回放 |
 
 在 OrcaLab 的 XML 资产上传流程中上传即可。
