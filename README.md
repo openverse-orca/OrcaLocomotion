@@ -9,18 +9,9 @@ assets.
 
 | Task | Training | OrcaLab playback |
 | --- | --- | --- |
-| `Unitree-Go2-Flat` | Unitree/mjlab | `./play_go2_flat.sh` |
-| `Unitree-Go2-Rough` | Unitree/mjlab | `./play_go2_rough.sh` |
-| `Unitree-G1-Flat` | Unitree/mjlab | `./play_g1_flat.sh` |
-
-The rough Go2 playback publishes the OrcaLab terrain asset:
-
-```text
-assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
-```
-
-The terrain is spawned at `z=0.05`, and the Go2 actor is spawned at the same
-height so it starts on the terrain instead of dropping onto it.
+| `Unitree-Go2-Flat` | Unitree/mjlab | `orca_rl.run_play` |
+| `Unitree-Go2-Rough` | Unitree/mjlab | `orca_rl.run_play` |
+| `Unitree-G1-Flat` | Unitree/mjlab | `orca_rl.run_play` |
 
 ## Installation
 
@@ -61,45 +52,39 @@ The resulting checkpoints can be passed to Orca RL playback.
 
 ## Playback
 
-Start OrcaLab, then run one of the simple playback scripts from the repository
-root:
+Start OrcaLab, then run the playback CLI from the repository root:
 
 ```bash
-./play_go2_flat.sh
-./play_go2_rough.sh
-./play_g1_flat.sh
+python -m orca_rl.run_play \
+  --config Unitree-Go2-Flat \
+  --policy-backend mjlab \
+  --checkpoint <checkpoint.pt>
+
+python -m orca_rl.run_play \
+  --config Unitree-Go2-Rough \
+  --policy-backend mjlab \
+  --checkpoint <checkpoint.pt>
+
+python -m orca_rl.run_play \
+  --config Unitree-G1-Flat \
+  --policy-backend mjlab \
+  --checkpoint <checkpoint.pt>
 ```
 
-The repository includes smoke-test checkpoints:
-
-```text
-checkpoints/test_model_Go2_mjlab_Flat.pt
-checkpoints/test_model_Go2_mjlab_Rough.pt
-checkpoints/test_model_G1_mjlab_Flat.pt
-```
-
-To play a freshly trained checkpoint, pass it as the first argument:
-
-```bash
-./play_go2_flat.sh third_party/unitree_rl_mjlab/logs/rsl_rl/go2_velocity/<run>/model_<iter>.pt
-./play_go2_rough.sh third_party/unitree_rl_mjlab/logs/rsl_rl/go2_velocity/<run>/model_<iter>.pt
-./play_g1_flat.sh third_party/unitree_rl_mjlab/logs/rsl_rl/g1_velocity/<run>/model_<iter>.pt
-```
+Use a checkpoint produced by the Unitree/mjlab training step.
 
 ## Assets
 
-Runtime assets kept in this repository are intentionally small:
+Upload the XML terrain packages to OrcaLab before using terrain playback:
 
-- debug arrow assets for playback visualization
-- primitive XML terrain used by local MuJoCo smoke tests
-- mjlab rough 5x5 XML collision terrain and upload zip
-- legacy multi-terrain collision XML/hfield still used by local tests
+| Asset package | Use |
+| --- | --- |
+| `assets/terrain/OrcaPrimitiveTerrainXml.zip` | Primitive XML terrain smoke tests |
+| `assets/terrain/MjlabRough5x5Xml.zip` | Go2 rough terrain playback |
 
-The rough terrain XML package is also available as:
-
-```text
-assets/terrain/MjlabRough5x5Xml.zip
-```
+Upload them in OrcaLab's XML asset upload flow. The rough Go2 playback uses the
+uploaded rough terrain asset and spawns it at `z=0.05`; the Go2 actor starts at
+the same height so it begins on the terrain instead of dropping onto it.
 
 ## Development
 
