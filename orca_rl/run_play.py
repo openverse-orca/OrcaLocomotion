@@ -448,7 +448,7 @@ def main() -> None:
     parser.add_argument(
         "--heading-arrow",
         action="store_true",
-        help="Also show the robot current velocity arrow.",
+        help="Also show the robot current velocity arrow. Enabled automatically with --command-arrow unless disabled.",
     )
     parser.add_argument(
         "--no-heading-arrow",
@@ -604,7 +604,7 @@ def main() -> None:
     )
     if args.command_arrow:
         task_cfg["debug_visualization"]["command_arrow"]["auto_publish"] = not bool(args.no_command_arrow_auto_publish)
-    enable_heading_arrow = bool(args.heading_arrow) and not bool(args.no_heading_arrow)
+    enable_heading_arrow = bool(args.heading_arrow) or (bool(args.command_arrow) and not bool(args.no_heading_arrow))
     _apply_command_arrow_debug_config(
         task_cfg,
         enabled=enable_heading_arrow,
