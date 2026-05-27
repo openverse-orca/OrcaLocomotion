@@ -98,8 +98,6 @@ class MjlabG1OrcaPlayBridge:
             )
         self.action_spec = _load_unitree_mjlab_g1_action_spec(_g1_joint_names(env))
         self.alignment_report = _align_orca_g1_runtime_to_mjlab(env, self.action_spec)
-        if self.arm_mode == "neutral":
-            _initialize_g1_arms_neutral(env, self.action_spec)
 
     def get_observations(self) -> np.ndarray:
         observations: list[np.ndarray] = []
@@ -644,34 +642,6 @@ def _load_mjlab_g1_joint_limits(g1_constants: Any, joint_names: list[str]) -> np
 
 def _is_g1_arm_joint(joint_name: str) -> bool:
     return any(part in str(joint_name) for part in ("shoulder", "elbow", "wrist"))
-
-
-def _initialize_g1_arms_neutral(env: Any, spec: MjlabG1ActionSpec) -> None:
-    if not np.any(spec.arm_joint_mask):
-        return
-    for task in getattr(env, "tasks", []):
-        if hasattr(task, "_nominal_qpos"):
-            task._nominal_qpos[:, spec.arm_joint_mask] = spec.neutral_qpos[spec.arm_joint_mask]
-        joint_qpos: dict[str, np.ndarray] = {}
-        joint_qvel: dict[str, np.ndarray] = {}
-        for agent in getattr(task, "agents", []):
-            if hasattr(agent, "nominal_qpos"):
-                agent.nominal_qpos[spec.arm_joint_mask] = spec.neutral_qpos[spec.arm_joint_mask]
-            if hasattr(agent, "obs_builder"):
-                agent.obs_builder.nominal_qpos[spec.arm_joint_mask] = spec.neutral_qpos[spec.arm_joint_mask]
-            if hasattr(agent, "reward_manager"):
-                agent.reward_manager.nominal_qpos[spec.arm_joint_mask] = spec.neutral_qpos[spec.arm_joint_mask]
-            if hasattr(agent, "action_mapper"):
-                agent.action_mapper.nominal_qpos[spec.arm_joint_mask] = spec.neutral_qpos[spec.arm_joint_mask]
-            for joint_index, joint_name in enumerate(agent.leg_joint_names):
-                if bool(spec.arm_joint_mask[joint_index]):
-                    joint_qpos[joint_name] = np.array([spec.neutral_qpos[joint_index]], dtype=np.float64)
-                    joint_qvel[joint_name] = np.zeros(1, dtype=np.float64)
-        if joint_qpos:
-            task.set_joint_qpos(joint_qpos)
-            task.set_joint_qvel(joint_qvel)
-            task.mj_forward()
-            task.update_data()
 
 
 def _load_mjlab_go2_joint_limits(go2_constants: Any, joint_names: list[str]) -> np.ndarray:
