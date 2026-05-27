@@ -66,7 +66,6 @@ class MjlabG1ActionSpec:
     armature: np.ndarray
     frictionloss: np.ndarray
     joint_limits: np.ndarray
-    default_qpos: np.ndarray
     neutral_qpos: np.ndarray
     arm_joint_mask: np.ndarray
 
@@ -557,7 +556,6 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
     armature = np.zeros(len(joint_names), dtype=np.float64)
     frictionloss = np.zeros(len(joint_names), dtype=np.float64)
     joint_limits = _load_mjlab_g1_joint_limits(g1_constants, joint_names)
-    default_qpos = _resolve_initial_joint_positions(g1_constants.HOME_KEYFRAME, joint_names)
     for joint_index, joint_name in enumerate(joint_names):
         matched = False
         for actuator_cfg in g1_constants.G1_ARTICULATION.actuators:
@@ -580,7 +578,6 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
         armature=armature,
         frictionloss=frictionloss,
         joint_limits=joint_limits,
-        default_qpos=default_qpos,
         neutral_qpos=_g1_dangling_arm_qpos(joint_names, joint_limits),
         arm_joint_mask=np.asarray([_is_g1_arm_joint(joint_name) for joint_name in joint_names], dtype=bool),
     )
@@ -746,11 +743,9 @@ def _align_orca_g1_runtime_to_mjlab(env: Any, spec: MjlabG1ActionSpec) -> dict[s
             _align_agent_to_mjlab_position_actuators(model, task, agent, spec)
             agent.joint_limits = spec.joint_limits.copy()
             agent.torque_limits = np.stack([-spec.effort_limit, spec.effort_limit], axis=1)
-            agent.nominal_qpos = spec.default_qpos.copy()
             report["agents"] += 1
             report["joints"] += len(agent.leg_joint_names)
             report["actuators"] += len(agent.actuator_names)
-        task._nominal_qpos = np.broadcast_to(spec.default_qpos, task._nominal_qpos.shape).copy()
         task._joint_limit_low = np.broadcast_to(spec.joint_limits[:, 0], task._joint_limit_low.shape).copy()
         task._joint_limit_high = np.broadcast_to(spec.joint_limits[:, 1], task._joint_limit_high.shape).copy()
         task._torque_low = np.broadcast_to(-spec.effort_limit, task._torque_low.shape).copy()
