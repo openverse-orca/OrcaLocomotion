@@ -78,7 +78,13 @@ Use a checkpoint produced by the Unitree/mjlab training step.
 playing in the OrcaLab scene:
 
 ```text
-assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+assets/e071469a36d3c8aa/test_terrain/prefabs/terrain_usda
+```
+
+You can also use this alternative 5x5 terrain asset:
+
+```text
+assets/e071469a36d3c8aa/terrain_5x5/prefabs/terrain_usda
 ```
 
 If you import your own OrcaLab terrain asset, pass the new spawnable asset path

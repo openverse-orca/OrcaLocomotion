@@ -75,7 +75,13 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 `Unitree-Go2-Rough` 在 OrcaLab scene 回放时会默认发布这个粗糙地形可视化资产：
 
 ```text
-assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+assets/e071469a36d3c8aa/test_terrain/prefabs/terrain_usda
+```
+
+也可以使用另一个 5x5 地形资产：
+
+```text
+assets/e071469a36d3c8aa/terrain_5x5/prefabs/terrain_usda
 ```
 
 如果导入了自己的 OrcaLab 地形资产，需要在 `python -m orca_rl.run_play` 中通过

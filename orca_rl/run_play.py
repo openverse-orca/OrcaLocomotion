@@ -23,7 +23,7 @@ ensure_project_root_on_path()
 DEFAULT_COMMAND_ARROW_ASSET_PATH = "assets/001d46537b9e555b/commandarrow/prefabs/command_arrow_usda"
 DEFAULT_HEADING_ARROW_ASSET_PATH = "assets/001d46537b9e555b/heading_arrow/prefabs/heading_arrow_usda"
 DEFAULT_ROUGH_TERRAIN_ASSET_PATH = (
-    "assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda"
+    "assets/e071469a36d3c8aa/test_terrain/prefabs/terrain_usda"
 )
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PRIMITIVE_TERRAIN_XML = PROJECT_ROOT / "assets/terrain/orca_primitive_terrain_xml/terrain.xml"
