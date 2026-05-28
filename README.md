@@ -26,7 +26,8 @@ cd OrcaLocomotion
 # 编译 C++ 扩展所需的系统依赖
 sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
 
-# 激活 OrcaLab Python 3.12 环境
+# 创建并激活 OrcaLab Python 3.12 环境
+conda create -n orcalab python=3.12
 conda activate orcalab
 
 pip install -r requirements.txt

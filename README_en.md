@@ -27,7 +27,8 @@ cd OrcaLocomotion
 # System dependencies for building bundled C++ extensions
 sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
 
-# Activate the OrcaLab Python 3.12 environment
+# Create and activate the OrcaLab Python 3.12 environment
+conda create -n orcalab python=3.12
 conda activate orcalab
 
 pip install -r requirements.txt
