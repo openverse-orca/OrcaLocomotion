@@ -1,6 +1,6 @@
-"""Installation script for the 'unitree_rl_mjlab' python package."""
+"""Installation script for the vendored 'mjlab_rl' python package."""
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 
 # Minimum dependencies required prior to installation
 INSTALL_REQUIRES = [
@@ -9,8 +9,8 @@ INSTALL_REQUIRES = [
 
 # Installation operation
 setup(
-    name="unitree_rl_mjlab",
-    packages=["src"],
+    name="mjlab_rl",
+    packages=find_namespace_packages(include=["src", "src.*"]),
     version="0.0.1",
     install_requires=INSTALL_REQUIRES,
 )

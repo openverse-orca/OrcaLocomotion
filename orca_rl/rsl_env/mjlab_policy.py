@@ -524,7 +524,7 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
         from src.assets.robots.unitree_g1 import g1_constants
     except ImportError as exc:
         raise ImportError(
-            "Unitree/mjlab G1 action bridge requires the vendored unitree_rl_mjlab package. "
+            "Unitree/mjlab G1 action bridge requires the vendored mjlab_rl package. "
             "Install it with: python -m pip install -e third_party/mjlab_rl"
         ) from exc
 
@@ -565,7 +565,7 @@ def _load_unitree_mjlab_go2_action_spec(joint_names: list[str]) -> MjlabGo2Actio
         from src.assets.robots.unitree_go2 import go2_constants
     except ImportError as exc:
         raise ImportError(
-            "Unitree/mjlab GO2 action bridge requires the vendored unitree_rl_mjlab package. "
+            "Unitree/mjlab GO2 action bridge requires the vendored mjlab_rl package. "
             "Install it with: python -m pip install -e third_party/mjlab_rl"
         ) from exc
 
