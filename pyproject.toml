@@ -19,6 +19,7 @@ dependencies = [
   "mujoco-warp==3.5.0",
   "mjlab==1.4.0",
   "tensordict>=0.7.0",
+  "tyro>=0.9.0",
   "onnx>=1.15.0",
   "onnxscript>=0.5.4",
   "tensorboard>=2.14.0",
