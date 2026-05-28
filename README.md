@@ -72,14 +72,26 @@ python -m orca_rl.run_play --config Unitree-G1-Flat --checkpoint <checkpoint.pt>
 
 ## 资产
 
-在地形回放前，将 XML 地形文件上传到 OrcaLab：
+`Unitree-Go2-Rough` 在 OrcaLab scene 回放时会默认发布这个粗糙地形可视化资产：
+
+```text
+assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+```
+
+如果导入了自己的 OrcaLab 地形资产，需要在 `python -m orca_rl.run_play` 中通过
+`--rough-terrain-asset <orca_asset_path>` 改成新的 spawnable asset 路径；必要时也可以用
+`--rough-terrain-actor <actor_name>` 改发布到 scene 里的 actor 名称。
+
+下面这两个 XML 是本仓库提供的本地 MuJoCo 碰撞地图，主要给
+`--local-mujoco --local-terrain-map` 使用；它们不是 OrcaLab scene 中自动发布的 visual asset。
+`--local-terrain-map` 不传具体值时会自动选择：rough 任务使用
+`assets/terrain/mjlab_rough_5x5_xml/terrain.xml`，flat 任务使用
+`assets/terrain/orca_primitive_terrain_xml/terrain.xml`。
 
 | 资产 | 用途 |
 | --- | --- |
 | `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | 地形测试 |
 | `assets/terrain/mjlab_rough_5x5_xml/terrain.xml` | Go2 粗糙地形回放 |
-
-在 OrcaLab 的 XML 资产上传流程中上传即可。
 
 ## 致谢
 

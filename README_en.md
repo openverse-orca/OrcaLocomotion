@@ -74,14 +74,27 @@ Use a checkpoint produced by the Unitree/mjlab training step.
 
 ## Assets
 
-Upload the XML terrain files to OrcaLab before using terrain playback:
+`Unitree-Go2-Rough` publishes this rough-terrain visual asset by default when
+playing in the OrcaLab scene:
+
+```text
+assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+```
+
+If you import your own OrcaLab terrain asset, pass the new spawnable asset path
+to `python -m orca_rl.run_play` with `--rough-terrain-asset <orca_asset_path>`.
+You can also change the scene actor name with `--rough-terrain-actor <actor_name>`.
+
+The XML files below are local MuJoCo collision maps bundled with this repository,
+mainly for `--local-mujoco --local-terrain-map`. They are not the visual asset
+auto-published into the OrcaLab scene. When `--local-terrain-map` is used without
+an explicit value, rough tasks use `assets/terrain/mjlab_rough_5x5_xml/terrain.xml`
+and flat tasks use `assets/terrain/orca_primitive_terrain_xml/terrain.xml`.
 
 | Asset | Use |
 | --- | --- |
 | `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | Terrain testing |
 | `assets/terrain/mjlab_rough_5x5_xml/terrain.xml` | Go2 rough terrain playback |
-
-Upload them in OrcaLab's XML asset upload flow.
 
 ## Acknowledgments
 
