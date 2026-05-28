@@ -5,7 +5,7 @@ Train policies and play them back in OrcaLab.
 
 | Simulation | Physical |
 | --- | --- |
-| <img src="output.gif" alt="OrcaLocomotion simulation preview" width="480"> | <img src="real.gif" alt="OrcaLocomotion physical preview" width="480"> |
+| <img src="output.gif" alt="OrcaLocomotion simulation preview" width="480"> | <img src="physical.gif" alt="OrcaLocomotion physical preview" width="480"> |
 
 ## Supported Tasks
 

@@ -5,7 +5,7 @@ OrcaLocomotion 是 OrcaLab 的训练扩展组件，支持训练 Unitree 机器�
 
 | 仿真 | 实机 |
 | --- | --- |
-| <img src="output.gif" alt="OrcaLocomotion simulation preview" width="480"> | <img src="real.gif" alt="OrcaLocomotion physical preview" width="480"> |
+| <img src="output.gif" alt="OrcaLocomotion simulation preview" width="480"> | <img src="physical.gif" alt="OrcaLocomotion physical preview" width="480"> |
 
 ## 支持的任务
 
