@@ -32,6 +32,7 @@ conda activate orcalab
 
 # Enter the downloaded OrcaLocomotion repository root
 cd OrcaLocomotion
+pip install --no-deps mjlab==1.2.0
 pip install -r requirements.txt
 ```
 
