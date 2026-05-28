@@ -31,7 +31,7 @@ conda activate orcalab
 
 # 进入刚下载的 OrcaLocomotion 仓库根目录
 cd OrcaLocomotion
-pip install --use-deprecated=legacy-resolver -r requirements.txt
+pip install -r requirements.txt
 ```
 
 > **OrcaLab 前置条件：** 回放需要在 OrcaLab 中订阅 `unitree_robots` 资产。
