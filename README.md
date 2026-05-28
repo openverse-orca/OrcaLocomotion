@@ -40,10 +40,10 @@ pip install -r requirements.txt
 ## 训练
 
 使用基于 mjlab 项目进行训练。以下命令以无头模式运行 mjlab 训练器，
-checkpoint 写入 `third_party/unitree_rl_mjlab/logs/rsl_rl/`。
+checkpoint 写入 `third_party/mjlab_rl/logs/rsl_rl/`。
 
 ```bash
-cd third_party/unitree_rl_mjlab
+cd third_party/mjlab_rl
 python scripts/train.py Unitree-Go2-Flat --env.scene.num-envs=4096
 python scripts/train.py Unitree-Go2-Rough --env.scene.num-envs=4096
 python scripts/train.py Unitree-G1-Flat --env.scene.num-envs=4096

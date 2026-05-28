@@ -9,7 +9,7 @@ mujoco==3.5.0
 warp-lang==1.12.0
 mujoco-warp==3.5.0
 mjlab==1.4.0
--e ./third_party/unitree_rl_mjlab
+-e ./third_party/mjlab_rl
 tensordict>=0.7.0
 onnx>=1.15.0
 onnxscript>=0.5.4

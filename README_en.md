@@ -42,10 +42,10 @@ pip install -r requirements.txt
 
 Train with the mjlab-based project. These commands run the mjlab trainer
 headlessly and write checkpoints under
-`third_party/unitree_rl_mjlab/logs/rsl_rl/`.
+`third_party/mjlab_rl/logs/rsl_rl/`.
 
 ```bash
-cd third_party/unitree_rl_mjlab
+cd third_party/mjlab_rl
 python scripts/train.py Unitree-Go2-Flat --env.scene.num-envs=4096
 python scripts/train.py Unitree-Go2-Rough --env.scene.num-envs=4096
 python scripts/train.py Unitree-G1-Flat --env.scene.num-envs=4096
