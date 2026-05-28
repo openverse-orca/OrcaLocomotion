@@ -92,26 +92,32 @@ git lfs install
 git lfs pull
 ```
 
-在 OrcaLab Python 环境里安装：
+使用 Python 3.12 环境安装依赖：
 
 ```bash
+python --version
 pip install -r requirements.txt
 ```
 
-`requirements.txt` 当前按本地 MuJoCo / MJWarp 实验路线写入：
+如果需要单独安装 OrcaLab 依赖：
+
+```bash
+pip install orca-lab==26.4.3
+```
+
+`requirements.txt` 当前主要依赖：
 
 ```text
-mujoco>=3.8.0.dev0
-warp-lang>=1.12.0
-mujoco-warp
-rsl-rl-lib
-torch
+orca-lab==26.4.3
+mujoco==3.5.0
+warp-lang==1.12.0
+mujoco-warp==3.5.0
+rsl-rl-lib>=5.0.1,<5.4.0
+torch>=2.6.0
 tensordict
 onnx / onnxscript
 tensorboard / wandb
 ```
-
-注意：`orca-gym 26.4.3` 仍声明固定依赖 `mujoco==3.5.0`。本项目现在为了 MJWarp 实验使用 MuJoCo 3.8，本地 G1 training 已验证可启动；如果后续使用 OrcaGym 中强依赖 3.5 的功能，需要重新验证。
 
 ## 快速命令
 
