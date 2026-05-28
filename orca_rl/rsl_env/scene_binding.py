@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import time
+import xml.etree.ElementTree as ET
 
 from .local_mjcf import build_local_mjcf_batch, prepare_local_terrain_cfg, resolve_existing_xml_path
 from .model_scanner import (
@@ -34,8 +35,6 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 G1_LOCAL_XML_CANDIDATES = [
     os.environ.get("ORCA_RL_G1_XML", ""),
     _PROJECT_ROOT / "third_party" / "mjlab_rl" / "src" / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
-    "/home/huan-hu/OrcaPlayground/examples/g1/g1_29dof_old.xml",
-    "/home/huan-hu/下载/unitree_rl_mjlab/src/assets/robots/unitree_g1/xmls/scene_g1.xml",
 ]
 GO2_LOCAL_XML_CANDIDATES = [
     os.environ.get("ORCA_RL_GO2_XML", ""),
@@ -48,7 +47,6 @@ GO2_LOCAL_XML_CANDIDATES = [
     / "unitree_go2"
     / "xmls"
     / "scene_go2.xml",
-    "/home/huan-hu/下载/unitree_rl_mjlab/src/assets/robots/unitree_go2/xmls/scene_go2.xml",
 ]
 
 G1_JOINT_SUFFIXES = [
@@ -276,6 +274,53 @@ G1_JOINT_LIMITS = [
 ]
 
 
+def _resolve_robot_xml_path(
+    path_or_auto: str | Path,
+    candidates: list[str | Path],
+    *,
+    robot_name: str,
+    required_joints: list[str],
+    required_actuators: list[str],
+) -> str:
+    source_xml_path = resolve_existing_xml_path(path_or_auto, candidates)
+    _require_robot_xml_abi(
+        source_xml_path,
+        robot_name=robot_name,
+        required_joints=required_joints,
+        required_actuators=required_actuators,
+    )
+    return source_xml_path
+
+
+def _require_robot_xml_abi(
+    xml_path: str | Path,
+    *,
+    robot_name: str,
+    required_joints: list[str],
+    required_actuators: list[str],
+) -> None:
+    path = Path(xml_path).expanduser().resolve()
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError as exc:
+        raise ValueError(f"{robot_name} local MJCF is not valid XML: {path}") from exc
+
+    joints = {element.get("name") for element in root.iter("joint") if element.get("name")}
+    actuators = {element.get("name") for element in root.iter("motor") if element.get("name")}
+    missing_joints = [name for name in required_joints if name not in joints]
+    missing_actuators = [name for name in required_actuators if name not in actuators]
+    if missing_joints or missing_actuators:
+        details = []
+        if missing_joints:
+            details.append(f"missing joints={missing_joints}")
+        if missing_actuators:
+            details.append(f"missing actuators={missing_actuators}")
+        raise ValueError(
+            f"{robot_name} local MJCF does not match the OrcaLocomotion action ABI: {path}. "
+            + "; ".join(details)
+        )
+
+
 def resolve_go2_scene_binding(
     orcagym_addr: str,
     time_step: float,
@@ -301,7 +346,13 @@ def resolve_go2_scene_binding(
         max_count = desired_count
     robot_config = deepcopy(GO2_CONFIG)
     if local_xml_path is not None:
-        source_xml_path = resolve_existing_xml_path(local_xml_path, GO2_LOCAL_XML_CANDIDATES)
+        source_xml_path = _resolve_robot_xml_path(
+            local_xml_path,
+            GO2_LOCAL_XML_CANDIDATES,
+            robot_name="GO2",
+            required_joints=list(robot_config["leg_joint_names"]),
+            required_actuators=list(robot_config["actuator_names"]),
+        )
         agent_names = [f"{spawn_agent_name.rsplit('_', 1)[0]}_{index:03d}" for index in range(desired_count)]
         local_terrain_cfg = prepare_local_terrain_cfg(
             terrain_cfg,
@@ -413,7 +464,13 @@ def resolve_g1_scene_binding(
         max_count = desired_count
     robot_config = _build_g1_robot_config()
     if local_xml_path is not None:
-        source_xml_path = resolve_existing_xml_path(local_xml_path, G1_LOCAL_XML_CANDIDATES)
+        source_xml_path = _resolve_robot_xml_path(
+            local_xml_path,
+            G1_LOCAL_XML_CANDIDATES,
+            robot_name="G1",
+            required_joints=["floating_base_joint", *G1_JOINT_SUFFIXES],
+            required_actuators=G1_ACTUATOR_SUFFIXES,
+        )
         agent_names = [f"{spawn_agent_name.rsplit('_', 1)[0]}_{index:03d}" for index in range(desired_count)]
         local_terrain_cfg = prepare_local_terrain_cfg(
             terrain_cfg,

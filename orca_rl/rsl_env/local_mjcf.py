@@ -157,7 +157,7 @@ def resolve_existing_xml_path(path_or_auto: str | Path, candidates: list[str | P
         if path.exists():
             return str(path.resolve())
     raise FileNotFoundError(
-        "Cannot find a local G1 MJCF source. Set `scene_binding.local_xml_path` or `ORCA_RL_G1_XML`."
+        "Cannot find a local MJCF source. Set `scene_binding.local_xml_path` or the robot XML environment variable."
     )
 
 
