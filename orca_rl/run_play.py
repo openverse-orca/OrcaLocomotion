@@ -57,6 +57,38 @@ def _apply_rough_terrain_play_overrides(task_cfg: dict) -> None:
     randomization_cfg["terrain_curriculum"] = False
 
 
+def _checkpoint_actor_input_dim(checkpoint: str | Path, torch_module) -> int | None:
+    path = Path(checkpoint).expanduser()
+    if not path.exists():
+        return None
+    payload = torch_module.load(path, map_location="cpu")
+    actor_state_dict = payload.get("actor_state_dict") if isinstance(payload, dict) else None
+    if not isinstance(actor_state_dict, dict):
+        return None
+    first_weight = actor_state_dict.get("mlp.0.weight")
+    if first_weight is None or not hasattr(first_weight, "shape") or len(first_weight.shape) < 2:
+        return None
+    return int(first_weight.shape[1])
+
+
+def _actor_observation_dim(env) -> int | None:
+    try:
+        observations = env.get_observations()
+        policy_obs = observations["policy"]
+        return int(policy_obs.shape[1])
+    except Exception:
+        return None
+
+
+def _looks_like_mjlab_actor_dim(robot_name: str, input_dim: int) -> bool:
+    robot = robot_name.strip().lower()
+    if robot in {"go2", "unitree_go2"}:
+        return int(input_dim) >= 47
+    if robot == "g1":
+        return int(input_dim) >= 98
+    return False
+
+
 def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
     task_cfg.setdefault("episode", {})["length_s"] = 1.0e9
     task_cfg.setdefault("observations", {})["add_noise"] = False
@@ -415,9 +447,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--policy-backend",
-        choices=("orca", "mjlab"),
-        default="mjlab",
-        help=argparse.SUPPRESS,
+        choices=("auto", "orca", "mjlab"),
+        default="auto",
+        help="`auto` selects the loader from checkpoint dimensions; `orca` loads orca_rl checkpoints; "
+        "`mjlab` loads Unitree/mjlab velocity checkpoints.",
     )
     parser.add_argument("--device", default=None)
     parser.add_argument("--steps", type=int, default=0, help="0 means run until interrupted.")
@@ -664,11 +697,12 @@ def main() -> None:
 
     device = args.device or task_cfg.get("play", {}).get("device", "cpu")
     robot_name = str(task_cfg.get("robot", "")).strip().lower()
+    project_root = Path(__file__).resolve().parents[1]
+    terrain_name = "rough" if _is_rough_play_task(task_cfg) else "flat"
+    effective_policy_backend = args.policy_backend
     if args.policy_backend == "mjlab":
         from orca_rl.rsl_env.mjlab_policy import find_latest_unitree_mjlab_checkpoint
 
-        project_root = Path(__file__).resolve().parents[1]
-        terrain_name = "rough" if _is_rough_play_task(task_cfg) else "flat"
         checkpoint = str(
             args.checkpoint
             or find_latest_unitree_mjlab_checkpoint(
@@ -677,6 +711,8 @@ def main() -> None:
                 terrain=terrain_name,
             )
         )
+    elif args.policy_backend == "auto" and args.checkpoint:
+        checkpoint = args.checkpoint
     else:
         checkpoint = args.checkpoint or str(
             find_latest_checkpoint(task_name=str(train_cfg.get("experiment_name") or task_cfg.get("name", "")) or None)
@@ -686,6 +722,23 @@ def main() -> None:
     except ImportError as exc:
         raise explain_missing_runtime_dependency(exc) from exc
     try:
+        if effective_policy_backend == "auto":
+            checkpoint_actor_dim = _checkpoint_actor_input_dim(checkpoint, torch)
+            env_actor_dim = _actor_observation_dim(env)
+            if (
+                checkpoint_actor_dim is not None
+                and env_actor_dim is not None
+                and checkpoint_actor_dim != env_actor_dim
+                and _looks_like_mjlab_actor_dim(robot_name, checkpoint_actor_dim)
+            ):
+                effective_policy_backend = "mjlab"
+            else:
+                effective_policy_backend = "orca"
+            print(
+                "[orca_rl.play] Auto policy backend: "
+                f"{effective_policy_backend} "
+                f"(checkpoint_actor_obs={checkpoint_actor_dim}, env_actor_obs={env_actor_dim})"
+            )
         print_runtime_summary(
             mode="play",
             env=env,
@@ -695,7 +748,7 @@ def main() -> None:
             checkpoint=checkpoint,
         )
         _print_debug_visualization_report(env)
-        if args.policy_backend == "mjlab":
+        if effective_policy_backend == "mjlab":
             from orca_rl.rsl_env.mjlab_policy import MjlabRslRlActorPolicy, make_mjlab_orca_play_bridge
 
             policy = MjlabRslRlActorPolicy.from_checkpoint(checkpoint, device=device)
@@ -773,11 +826,11 @@ def main() -> None:
             if args.command_sweep:
                 command = _command_sweep_vector(args, sim_time=step * dt)
                 _set_env_manual_command(env, command)
-                if args.policy_backend == "mjlab":
+                if effective_policy_backend == "mjlab":
                     obs = bridge.get_observations()
                 else:
                     obs = env.get_observations().to(device)
-            if args.policy_backend == "mjlab":
+            if effective_policy_backend == "mjlab":
                 actions_np = policy.act_numpy(obs, device=device)
                 obs = bridge.step(actions_np)
             else:
