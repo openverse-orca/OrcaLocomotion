@@ -57,7 +57,7 @@ The resulting checkpoints can be passed to OrcaLocomotion playback.
 ## Playback
 
 After starting OrcaLab, select **Run** -> **Start Simulation** ->
-**No Simulation Program** -> **OK**. Then run the playback CLI from the
+**No Simulation Program** -> **Start**. Then run the playback CLI from the
 repository root:
 
 ```bash

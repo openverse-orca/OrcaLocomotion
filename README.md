@@ -54,7 +54,7 @@ python scripts/train.py Unitree-G1-Flat --env.scene.num-envs=4096
 
 ## 回放
 
-启动 OrcaLab 后，依次选择 **运行** -> **开始模拟** -> **无仿真程序启动** -> **确定**。
+启动 OrcaLab 后，依次选择 **运行** -> **开始模拟** -> **无仿真程序启动** -> **启动**。
 然后在仓库根目录运行回放命令：
 
 ```bash
