@@ -38,8 +38,8 @@ pip install -r requirements.txt
 
 ## 训练
 
-使用捆绑的 Unitree/mjlab 项目进行训练。以下命令以无头模式运行 mjlab
-训练器，checkpoint 写入 `third_party/unitree_rl_mjlab/logs/rsl_rl/`。
+使用基于 mjlab 项目进行训练。以下命令以无头模式运行 mjlab 训练器，
+checkpoint 写入 `third_party/unitree_rl_mjlab/logs/rsl_rl/`。
 
 ```bash
 cd third_party/unitree_rl_mjlab

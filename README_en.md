@@ -39,8 +39,8 @@ pip install -r requirements.txt
 
 ## Training
 
-Train with the bundled Unitree/mjlab project. These commands run the native
-mjlab trainer headlessly and write checkpoints under
+Train with the mjlab-based project. These commands run the mjlab trainer
+headlessly and write checkpoints under
 `third_party/unitree_rl_mjlab/logs/rsl_rl/`.
 
 ```bash
