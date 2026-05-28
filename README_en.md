@@ -87,6 +87,10 @@ You can also use this alternative 5x5 terrain asset:
 assets/e071469a36d3c8aa/terrain_5x5/prefabs/terrain_usda
 ```
 
+You must subscribe to `OrcaPrimitiveTerrainXml` and
+`MjlabRough5x5xml_20260527` in the Orca cloud asset management platform. They
+are the rendering assets corresponding to the two terrain height fields.
+
 If you import your own OrcaLab terrain asset, pass the new spawnable asset path
 to `python -m orca_rl.run_play` with `--rough-terrain-asset <orca_asset_path>`.
 You can also change the scene actor name with `--rough-terrain-actor <actor_name>`.

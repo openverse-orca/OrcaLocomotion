@@ -84,6 +84,9 @@ assets/e071469a36d3c8aa/test_terrain/prefabs/terrain_usda
 assets/e071469a36d3c8aa/terrain_5x5/prefabs/terrain_usda
 ```
 
+必须在 Orca 云端资产管理平台订阅 `OrcaPrimitiveTerrainXml` 和
+`MjlabRough5x5xml_20260527`，它们是两个地形高度图对应的渲染资产。
+
 如果导入了自己的 OrcaLab 地形资产，需要在 `python -m orca_rl.run_play` 中通过
 `--rough-terrain-asset <orca_asset_path>` 改成新的 spawnable asset 路径；必要时也可以用
 `--rough-terrain-actor <actor_name>` 改发布到 scene 里的 actor 名称。
