@@ -32,7 +32,7 @@ conda activate orcalab
 
 # Enter the downloaded OrcaLocomotion repository root
 cd OrcaLocomotion
-pip install -r requirements.txt
+pip install --use-deprecated=legacy-resolver -r requirements.txt
 ```
 
 > **OrcaLab prerequisite:** Playback requires the `unitree_robots` asset subscribed
