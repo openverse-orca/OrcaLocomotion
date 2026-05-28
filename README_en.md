@@ -3,6 +3,8 @@
 OrcaLocomotion is an OrcaLab training extension for Unitree robot locomotion policies.
 Train policies and play them back in OrcaLab.
 
+![OrcaLocomotion playback preview](output.gif)
+
 ## Supported Tasks
 
 | Task | Training | OrcaLab playback |
