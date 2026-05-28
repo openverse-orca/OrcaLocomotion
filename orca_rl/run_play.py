@@ -705,7 +705,12 @@ def main() -> None:
                     f"checkpoint_action_dim={policy.output_dim}, env_num_actions={env.num_actions}, "
                     f"config_robot={robot_name or 'unknown'}"
                 )
-            bridge = make_mjlab_orca_play_bridge(env, expected_obs_dim=policy.input_dim, robot=robot_name)
+            bridge = make_mjlab_orca_play_bridge(
+                env,
+                expected_obs_dim=policy.input_dim,
+                robot=robot_name,
+                g1_arm_mode="neutral",
+            )
             fixed_command = _fixed_command_vector(args)
             if args.command_sweep:
                 _set_env_manual_command(env, _command_sweep_vector(args, sim_time=0.0))
