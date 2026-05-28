@@ -22,7 +22,6 @@ needed when playing policies in OrcaLab.
 
 ```bash
 git clone https://github.com/openverse-orca/OrcaLocomotion.git
-cd OrcaLocomotion
 
 # System dependencies for building bundled C++ extensions
 sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
@@ -31,6 +30,8 @@ sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev
 conda create -n orcalab python=3.12
 conda activate orcalab
 
+# Enter the downloaded OrcaLocomotion repository root
+cd OrcaLocomotion
 pip install -r requirements.txt
 ```
 

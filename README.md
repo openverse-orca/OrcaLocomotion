@@ -21,7 +21,6 @@ OrcaLocomotion 是 OrcaLab 的训练扩展组件，支持训练 Unitree 机器�
 
 ```bash
 git clone https://github.com/openverse-orca/OrcaLocomotion.git
-cd OrcaLocomotion
 
 # 编译 C++ 扩展所需的系统依赖
 sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
@@ -30,6 +29,8 @@ sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev
 conda create -n orcalab python=3.12
 conda activate orcalab
 
+# 进入刚下载的 OrcaLocomotion 仓库根目录
+cd OrcaLocomotion
 pip install -r requirements.txt
 ```
 
