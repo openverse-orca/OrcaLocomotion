@@ -27,16 +27,10 @@ cd OrcaLocomotion
 # System dependencies for building bundled C++ extensions
 sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
 
-conda create -n orca_rl python=3.12
-conda activate orca_rl
+# Activate the OrcaLab Python 3.12 environment
+conda activate orcalab
 
 pip install -r requirements.txt
-```
-
-If you need to install the OrcaLab dependency separately:
-
-```bash
-pip install orca-lab==26.4.3
 ```
 
 > **OrcaLab prerequisite:** Playback requires the `unitree_robots` asset subscribed
