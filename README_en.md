@@ -56,7 +56,9 @@ The resulting checkpoints can be passed to OrcaLocomotion playback.
 
 ## Playback
 
-Start OrcaLab, then run the playback CLI from the repository root:
+After starting OrcaLab, select **Run** -> **Start Simulation** ->
+**No Simulation Program** -> **OK**. Then run the playback CLI from the
+repository root:
 
 ```bash
 python -m orca_rl.run_play --config Unitree-Go2-Flat --checkpoint <checkpoint.pt>
