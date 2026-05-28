@@ -3,7 +3,9 @@
 OrcaLocomotion 是 OrcaLab 的训练扩展组件，支持训练 Unitree 机器人的运动控制策略，
 并可在 OrcaLab 中播放训练好的策略。
 
-![OrcaLocomotion playback preview](output.gif)
+| 仿真 | 实机 |
+| --- | --- |
+| ![OrcaLocomotion simulation preview](output.gif) | ![OrcaLocomotion physical preview](real.gif) |
 
 ## 支持的任务
 
