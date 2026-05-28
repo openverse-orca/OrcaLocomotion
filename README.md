@@ -82,15 +82,10 @@ assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
 `--rough-terrain-asset <orca_asset_path>` 改成新的 spawnable asset 路径；必要时也可以用
 `--rough-terrain-actor <actor_name>` 改发布到 scene 里的 actor 名称。
 
-下面这两个 XML 是本仓库提供的本地 MuJoCo 碰撞地图，主要给
-`--local-mujoco --local-terrain-map` 使用；它们不是 OrcaLab scene 中自动发布的 visual asset。
-`--local-terrain-map` 不传具体值时会自动选择：rough 任务使用
-`assets/terrain/mjlab_rough_5x5_xml/terrain.xml`，flat 任务使用
-`assets/terrain/orca_primitive_terrain_xml/terrain.xml`。
+仓库中同时保留了对应的 rough 地形 XML 源文件，便于检查或重新导入资产：
 
 | 资产 | 用途 |
 | --- | --- |
-| `assets/terrain/orca_primitive_terrain_xml/terrain.xml` | 地形测试 |
 | `assets/terrain/mjlab_rough_5x5_xml/terrain.xml` | Go2 粗糙地形回放 |
 
 ## 致谢
