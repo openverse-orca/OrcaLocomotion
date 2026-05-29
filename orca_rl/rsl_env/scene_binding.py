@@ -34,12 +34,11 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 G1_LOCAL_XML_CANDIDATES = [
     os.environ.get("ORCA_RL_G1_XML", ""),
-    _PROJECT_ROOT / "third_party" / "mjlab_rl" / "src" / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
+    _PROJECT_ROOT / "mjlab_rl" / "src" / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
 ]
 GO2_LOCAL_XML_CANDIDATES = [
     os.environ.get("ORCA_RL_GO2_XML", ""),
     _PROJECT_ROOT
-    / "third_party"
     / "mjlab_rl"
     / "src"
     / "assets"

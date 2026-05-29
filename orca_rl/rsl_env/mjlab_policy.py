@@ -220,7 +220,7 @@ def find_latest_unitree_mjlab_checkpoint(
         if path.exists():
             return path
     candidates = []
-    root = project_root / "third_party" / "mjlab_rl" / "logs" / "rsl_rl"
+    root = project_root / "mjlab_rl" / "logs" / "rsl_rl"
     candidates.extend(root.glob(f"{robot_name}_velocity/*/model_*.pt"))
     candidates = sorted(candidates, key=lambda path: path.stat().st_mtime)
     if not candidates:
@@ -525,7 +525,7 @@ def _load_unitree_mjlab_g1_action_spec(joint_names: list[str]) -> MjlabG1ActionS
     except ImportError as exc:
         raise ImportError(
             "Unitree/mjlab G1 action bridge requires the vendored mjlab_rl package. "
-            "Install it with: python -m pip install -e third_party/mjlab_rl"
+            "Install it with: python -m pip install -e mjlab_rl"
         ) from exc
 
     scale = _resolve_regex_values(g1_constants.G1_ACTION_SCALE, joint_names)
@@ -566,7 +566,7 @@ def _load_unitree_mjlab_go2_action_spec(joint_names: list[str]) -> MjlabGo2Actio
     except ImportError as exc:
         raise ImportError(
             "Unitree/mjlab GO2 action bridge requires the vendored mjlab_rl package. "
-            "Install it with: python -m pip install -e third_party/mjlab_rl"
+            "Install it with: python -m pip install -e mjlab_rl"
         ) from exc
 
     scale = np.full(len(joint_names), 0.25, dtype=np.float64)
