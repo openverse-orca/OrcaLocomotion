@@ -20,7 +20,7 @@ ensure_project_root_on_path()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CHECKPOINT = PROJECT_ROOT / "checkpoints/test_model_Go2_mjlab_Rough.pt"
-DEFAULT_ROUGH_TERRAIN_ASSET_PATH = "assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda"
+DEFAULT_ROUGH_TERRAIN_ASSET_PATH = "assets/e071469a36d3c8aa/test_terrain/prefabs/terrain_usda"
 
 
 def main() -> None:

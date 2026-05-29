@@ -281,7 +281,7 @@ python -m orca_rl.run_play \
 MJLab rough 5x5 默认 OrcaLab 可视地形：
 
 ```text
-assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+assets/e071469a36d3c8aa/test_terrain/prefabs/terrain_usda
 ```
 
 `Unitree-G1-Rough` / `Unitree-GO2-Rough` 在 OrcaLab play 时会默认尝试发布这份视觉地形 actor，actor 名为 `mjlab_rough_5x5_terrain`，默认位置是 `[0, 0, 0.05]`。这只负责 OrcaLab 渲染侧；本地 MuJoCo collision 仍然使用项目里的 XML：
@@ -362,7 +362,7 @@ Go2 rough terrain keyboard teleop：
 默认会发布：
 
 ```text
-assets/001d46537b9e555b/mjlabrough5x5xml_v2/prefabs/terrain_usda
+assets/e071469a36d3c8aa/test_terrain/prefabs/terrain_usda
 ```
 
 默认使用 `Unitree-Go2-Rough` 和 `checkpoints/test_model_Go2_mjlab_Rough.pt`。按键和 G1 键盘脚本一致：方向键 / keypad 8/2/4/6 控制 vx/vy，Z/C 或 keypad 7/9 控制 yaw，Space/5 归零，Q 退出。
