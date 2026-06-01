@@ -29,16 +29,21 @@ class SceneBinding:
 
 G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda"
 GO2_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda"
+_PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 G1_LOCAL_XML_CANDIDATES = [
     os.environ.get("ORCA_RL_G1_XML", ""),
+    _PACKAGE_ROOT / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
+    _PROJECT_ROOT / "src" / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
+    _PROJECT_ROOT / "mjlab_rl" / "src" / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
     _PROJECT_ROOT / "third_party" / "unitree_rl_mjlab" / "src" / "assets" / "robots" / "unitree_g1" / "xmls" / "scene_g1.xml",
-    "/home/huan-hu/OrcaPlayground/examples/g1/g1_29dof_old.xml",
-    "/home/huan-hu/下载/unitree_rl_mjlab/src/assets/robots/unitree_g1/xmls/scene_g1.xml",
 ]
 GO2_LOCAL_XML_CANDIDATES = [
     os.environ.get("ORCA_RL_GO2_XML", ""),
+    _PACKAGE_ROOT / "assets" / "robots" / "unitree_go2" / "xmls" / "scene_go2.xml",
+    _PROJECT_ROOT / "src" / "assets" / "robots" / "unitree_go2" / "xmls" / "scene_go2.xml",
+    _PROJECT_ROOT / "mjlab_rl" / "src" / "assets" / "robots" / "unitree_go2" / "xmls" / "scene_go2.xml",
     _PROJECT_ROOT
     / "third_party"
     / "unitree_rl_mjlab"
@@ -48,7 +53,6 @@ GO2_LOCAL_XML_CANDIDATES = [
     / "unitree_go2"
     / "xmls"
     / "scene_go2.xml",
-    "/home/huan-hu/下载/unitree_rl_mjlab/src/assets/robots/unitree_go2/xmls/scene_go2.xml",
 ]
 
 G1_JOINT_SUFFIXES = [

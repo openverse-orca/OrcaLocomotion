@@ -30,3 +30,6 @@ dev = []
 
 [tool.setuptools.packages.find]
 include = ["orca_rl*"]
+
+[tool.setuptools.package-data]
+orca_rl = ["assets/**/*"]
