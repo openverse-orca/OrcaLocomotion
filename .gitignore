@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Training outputs
+trained_models_tmp/
+logs/
+runs/
+wandb/
+*.pt
+*.onnx
+*.csv
