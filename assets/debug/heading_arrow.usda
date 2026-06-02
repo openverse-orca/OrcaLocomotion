@@ -1,0 +1,74 @@
+#usda 1.0
+(
+    defaultPrim = "HeadingArrow"
+    doc = "Orca RL robot velocity debug arrow. The mesh points along local +X. Use heading_arrow_000_freejoint when imported as a runtime-controllable MuJoCo body."
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "HeadingArrow"
+{
+    def Mesh "HeadingArrowMesh" (
+        apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform token subdivisionScheme = "none"
+        point3f[] points = [
+            (-0.25, -0.04, -0.04),
+            (-0.25, 0.04, -0.04),
+            (-0.25, 0.04, 0.04),
+            (-0.25, -0.04, 0.04),
+            (0.28, -0.04, -0.04),
+            (0.28, 0.04, -0.04),
+            (0.28, 0.04, 0.04),
+            (0.28, -0.04, 0.04),
+            (0.28, -0.14, -0.14),
+            (0.28, 0.14, -0.14),
+            (0.28, 0.14, 0.14),
+            (0.28, -0.14, 0.14),
+            (0.65, 0, 0),
+        ]
+        int[] faceVertexCounts = [
+            4, 4, 4, 4, 4, 4,
+            4, 3, 3, 3, 3,
+        ]
+        int[] faceVertexIndices = [
+            0, 1, 2, 3,
+            4, 7, 6, 5,
+            0, 4, 5, 1,
+            1, 5, 6, 2,
+            2, 6, 7, 3,
+            3, 7, 4, 0,
+            8, 9, 10, 11,
+            8, 12, 9,
+            9, 12, 10,
+            10, 12, 11,
+            11, 12, 8,
+        ]
+        float3[] extent = [(-0.25, -0.14, -0.14), (0.65, 0.14, 0.14)]
+        rel material:binding = </HeadingArrow/Looks/OrangePreviewSurface> (
+            bindMaterialAs = "weakerThanDescendants"
+        )
+        uniform token purpose = "default"
+    }
+
+    def Scope "Looks"
+    {
+        def Material "OrangePreviewSurface"
+        {
+            token outputs:surface.connect = </HeadingArrow/Looks/OrangePreviewSurface/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 0.48, 0)
+                color3f inputs:emissiveColor = (0.35, 0.12, 0)
+                float inputs:metallic = 0
+                float inputs:opacity = 1
+                float inputs:roughness = 0.35
+                int inputs:useSpecularWorkflow = 0
+                token outputs:surface
+            }
+        }
+    }
+}
