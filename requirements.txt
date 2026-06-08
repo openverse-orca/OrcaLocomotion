@@ -14,5 +14,6 @@ tensordict>=0.7.0
 onnx>=1.15.0
 onnxruntime>=1.17.0
 onnxscript>=0.5.4
+pynput>=1.7.6
 tensorboard>=2.14.0
 wandb>=0.17.0
