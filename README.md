@@ -367,6 +367,32 @@ assets/001d46537b9e555b/orcaprimitiveterrain/prefabs/terrain_usda
 
 默认使用 `Unitree-Go2-Rough` 和 `checkpoints/test_model_Go2_mjlab_Rough.pt`。按键和 G1 键盘脚本一致：方向键 / keypad 8/2/4/6 控制 vx/vy，Z/C 或 keypad 7/9 控制 yaw，Space/5 归零，Q 退出。
 
+G1 TWIST2 keyboard play：
+
+```bash
+./play_g1_twist2_keyboard.sh
+```
+
+默认使用仓库内置的 TWIST2 ONNX policy 和 29DoF G1 MuJoCo XML。常用按键：
+
+| 按键 | 功能 |
+|---|---|
+| `w` / `s` | 前进 / 后退速度 |
+| `a` / `d` | 左 / 右横移速度 |
+| `q` / `e` | 左 / 右 yaw 速度 |
+| `space` | 速度清零 |
+| `r` / `f` | 身体高度升 / 降 |
+| `t` | 重置 mimic target |
+| `j` / `l` | 腰 yaw |
+| `i` / `k` | 腰 pitch |
+| `1` / `2` | 左肩 pitch |
+| `3` / `4` | 右肩 pitch |
+| `5` / `6` | 左肘 |
+| `7` / `8` | 右肘 |
+| `9` / `0` | 双臂内收 / 外展 |
+| `?` | 打印帮助 |
+| `Q` | 退出 |
+
 本地 `assets/` 只保留运行和上传还在使用的文件：debug arrow 源包、primitive XML 地形、mjlab rough XML 地形、multi-terrain collision XML/hfield。旧的 mjlab rough USDZ 本地备份和 multi-terrain USDA/USDZ 备份已清理，运行时使用 OrcaLab asset path 或 XML collision 源。
 
 `--command-arrow` 默认会在机器人 auto-publish 时把正式 OrcaLab 箭头资产同批发布进 scene，避免单独发布箭头覆盖现有机器人场景：
