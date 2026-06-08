@@ -12,6 +12,7 @@ mjlab==1.2.0
 -e ./third_party/unitree_rl_mjlab
 tensordict>=0.7.0
 onnx>=1.15.0
+onnxruntime>=1.17.0
 onnxscript>=0.5.4
 tensorboard>=2.14.0
 wandb>=0.17.0

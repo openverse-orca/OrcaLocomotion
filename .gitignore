@@ -16,3 +16,6 @@ wandb/
 !checkpoints/test_model_Go2_mjlab_Flat.pt
 !checkpoints/model_3100_Lite3.pt
 *.onnx
+!orca_rl/assets/ckpts/
+!orca_rl/assets/ckpts/twist2/
+!orca_rl/assets/ckpts/twist2/*.onnx
