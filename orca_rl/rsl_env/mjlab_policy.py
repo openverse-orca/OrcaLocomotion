@@ -28,8 +28,14 @@ class MjlabRslRlActorPolicy(nn.Module):
         self.input_dim = int(first_weight.shape[1])
         self.output_dim = int(actor_state_dict[_last_mlp_weight_key(actor_state_dict)].shape[0])
 
-        self.register_buffer("obs_mean", actor_state_dict["obs_normalizer._mean"].clone().float())
-        self.register_buffer("obs_std", actor_state_dict["obs_normalizer._std"].clone().float())
+        obs_mean = actor_state_dict.get("obs_normalizer._mean")
+        obs_std = actor_state_dict.get("obs_normalizer._std")
+        self.normalize_obs = obs_mean is not None and obs_std is not None
+        if obs_mean is None or obs_std is None:
+            obs_mean = torch.zeros(self.input_dim, dtype=torch.float32)
+            obs_std = torch.ones(self.input_dim, dtype=torch.float32)
+        self.register_buffer("obs_mean", obs_mean.clone().float())
+        self.register_buffer("obs_std", obs_std.clone().float())
         self.layers = _build_mlp(actor_state_dict)
 
     @classmethod
@@ -47,7 +53,8 @@ class MjlabRslRlActorPolicy(nn.Module):
         return policy
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        obs = (obs - self.obs_mean) / (self.obs_std + 1.0e-2)
+        if self.normalize_obs:
+            obs = (obs - self.obs_mean) / (self.obs_std + 1.0e-2)
         return self.layers(obs)
 
     @torch.inference_mode()
@@ -200,6 +207,35 @@ class MjlabGo2OrcaPlayBridge:
         return self.get_observations()
 
 
+class MjlabLite3OrcaPlayBridge(MjlabGo2OrcaPlayBridge):
+    """Build the 45-D Lite3 actor ABI and apply Lite3 position targets."""
+
+    def __init__(self, env: Any, *, expected_obs_dim: int) -> None:
+        self.env = env
+        self.expected_obs_dim = int(expected_obs_dim)
+        if self.expected_obs_dim != 45:
+            raise ValueError(f"DeepRobotics/mjlab Lite3 flat actor expects 45 observations, got {expected_obs_dim}.")
+        self.action_spec = _load_mjlab_lite3_action_spec(_go2_joint_names(env))
+        self.alignment_report = _align_orca_quadruped_runtime_to_mjlab(env, self.action_spec)
+
+    def get_observations(self) -> np.ndarray:
+        observations: list[np.ndarray] = []
+        for task in self.env.tasks:
+            foot_positions = task._query_all_foot_positions()
+            contact_state = task._query_batched_contacts()
+            for index in range(task.num_envs):
+                state = task._read_state(
+                    index,
+                    update_air_time=False,
+                    foot_contacts=contact_state["foot_contacts"][index],
+                    foot_pos=foot_positions[index],
+                )
+                observations.append(
+                    _build_mjlab_lite3_actor_obs(state=state, default_qpos=self.action_spec.default_qpos)
+                )
+        return np.stack(observations, axis=0).astype(np.float32)
+
+
 def make_mjlab_orca_play_bridge(
     env: Any,
     *,
@@ -212,6 +248,8 @@ def make_mjlab_orca_play_bridge(
         return MjlabG1OrcaPlayBridge(env, expected_obs_dim=expected_obs_dim, arm_mode=g1_arm_mode)
     if robot_name in {"go2", "unitree_go2"}:
         return MjlabGo2OrcaPlayBridge(env, expected_obs_dim=expected_obs_dim)
+    if robot_name in {"lite3", "deeprobotics_lite3"}:
+        return MjlabLite3OrcaPlayBridge(env, expected_obs_dim=expected_obs_dim)
     raise ValueError(f"Unsupported Unitree/mjlab Orca play bridge robot: {robot_name!r}")
 
 
@@ -240,6 +278,8 @@ def find_latest_unitree_mjlab_checkpoint(
     candidates = []
     root = project_root / "third_party" / "unitree_rl_mjlab" / "logs" / "rsl_rl"
     candidates.extend(root.glob(f"{robot_name}_velocity/*/model_*.pt"))
+    if robot_name in {"lite3", "deeprobotics_lite3"}:
+        candidates.extend(root.glob("deeprobotics_lite3_flat/*/model_*.pt"))
     candidates = sorted(candidates, key=lambda path: path.stat().st_mtime)
     if not candidates:
         searched = [str(path) for path in candidate_paths]
@@ -262,6 +302,8 @@ def _unitree_mjlab_default_checkpoint_names(terrain: str) -> dict[str, str]:
         "g1": "test_model_G1_mjlab_Flat.pt",
         "go2": "test_model_Go2_mjlab_Flat.pt",
         "unitree_go2": "test_model_Go2_mjlab_Flat.pt",
+        "lite3": "model_3100_Lite3.pt",
+        "deeprobotics_lite3": "model_3100_Lite3.pt",
     }
 
 
@@ -376,6 +418,22 @@ def _build_mjlab_go2_actor_obs(
     elif obs.size > expected_dim:
         obs = obs[:expected_dim]
     return obs.astype(np.float32)
+
+
+def _build_mjlab_lite3_actor_obs(*, state: Any, default_qpos: np.ndarray) -> np.ndarray:
+    rot = quat_wxyz_to_rotmat(state.base_quat)
+    terms = [
+        0.25 * (rot.T @ state.base_ang_vel_world),
+        rot.T @ _GRAVITY_W,
+        state.command,
+        state.qpos - default_qpos,
+        0.05 * state.qvel,
+        state.last_action,
+    ]
+    obs = np.concatenate(terms).astype(np.float32)
+    if obs.size != 45:
+        raise ValueError(f"Lite3 observation ABI mismatch: expected 45, built {obs.size}.")
+    return obs
 
 
 def _mjlab_phase(*, episode_length: int, step_dt: float, period: float, command: np.ndarray) -> np.ndarray:
@@ -629,6 +687,60 @@ def _load_unitree_mjlab_go2_action_spec(joint_names: list[str]) -> MjlabGo2Actio
         joint_limits=joint_limits,
         default_qpos=default_qpos,
     )
+
+
+def _load_mjlab_lite3_action_spec(joint_names: list[str]) -> MjlabGo2ActionSpec:
+    import mujoco
+
+    xml_path = Path(__file__).resolve().parents[1] / "assets/robots/deeprobotics_lite3/xmls/lite3.xml"
+    model = mujoco.MjModel.from_xml_path(str(xml_path))
+    joint_limits = []
+    for name in joint_names:
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if joint_id < 0:
+            raise ValueError(f"Cannot find Lite3 joint in bundled MJCF: {name}")
+        joint_limits.append(model.jnt_range[joint_id].copy())
+    return MjlabGo2ActionSpec(
+        scale=np.asarray([0.125, 0.25, 0.25] * 4, dtype=np.float64),
+        kp=np.full(12, 30.0, dtype=np.float64),
+        kd=np.full(12, 1.0, dtype=np.float64),
+        effort_limit=np.asarray([24.0, 24.0, 36.0] * 4, dtype=np.float64),
+        armature=np.zeros(12, dtype=np.float64),
+        frictionloss=np.zeros(12, dtype=np.float64),
+        joint_limits=np.asarray(joint_limits, dtype=np.float64),
+        default_qpos=np.asarray([0.0, -1.0, 1.8, 0.0, -1.0, 1.8, 0.0, -1.08, 1.8, 0.0, -1.08, 1.8]),
+    )
+
+
+def _align_orca_quadruped_runtime_to_mjlab(env: Any, spec: MjlabGo2ActionSpec) -> dict[str, int]:
+    report = {key: 0 for key in (
+        "tasks", "agents", "joints", "actuators", "position_actuator_tasks",
+        "contact_geoms", "foot_contact_geoms", "nonfoot_contact_geoms",
+        "base_height_resets", "imu_gyro_sensors",
+    )}
+    for task in getattr(env, "tasks", []):
+        model = _task_mujoco_model(task)
+        if model is None or getattr(task, "_mjwarp_runtime", None) is not None:
+            continue
+        report["tasks"] += 1
+        for agent in task.agents:
+            _align_agent_to_mjlab_position_actuators(model, task, agent, spec)
+            agent.joint_limits = spec.joint_limits.copy()
+            agent.torque_limits = np.stack([-spec.effort_limit, spec.effort_limit], axis=1)
+            agent.nominal_qpos = spec.default_qpos.copy()
+            report["agents"] += 1
+            report["joints"] += len(agent.leg_joint_names)
+            report["actuators"] += len(agent.actuator_names)
+        task._nominal_qpos = np.broadcast_to(spec.default_qpos, task._nominal_qpos.shape).copy()
+        task._joint_limit_low = np.broadcast_to(spec.joint_limits[:, 0], task._joint_limit_low.shape).copy()
+        task._joint_limit_high = np.broadcast_to(spec.joint_limits[:, 1], task._joint_limit_high.shape).copy()
+        task._torque_low = np.broadcast_to(-spec.effort_limit, task._torque_low.shape).copy()
+        task._torque_high = np.broadcast_to(spec.effort_limit, task._torque_high.shape).copy()
+        task._mjlab_position_actuator_aligned = True
+        report["position_actuator_tasks"] += 1
+        task.mj_forward()
+        task.update_data()
+    return report
 
 
 def _load_mjlab_g1_joint_limits(g1_constants: Any, joint_names: list[str]) -> np.ndarray:

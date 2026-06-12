@@ -15,7 +15,7 @@ from orca_rl.utils import (
     find_latest_checkpoint,
     load_task_and_train_cfg,
 )
-from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH, GO2_AGENT_ASSET_PATH
+from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH, GO2_AGENT_ASSET_PATH, LITE3_AGENT_ASSET_PATH
 
 ensure_project_root_on_path()
 
@@ -78,7 +78,7 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
     _apply_rough_terrain_play_overrides(task_cfg)
     scene_cfg = task_cfg.setdefault("scene_binding", {})
     if local_mujoco:
-        if scene_cfg.get("resolver") in {"g1", "go2"}:
+        if scene_cfg.get("resolver") in {"g1", "go2", "lite3"}:
             scene_cfg.setdefault("local_xml_path", "auto")
             scene_cfg.setdefault("local_clone_spacing", 2.0)
         return
@@ -92,6 +92,13 @@ def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
             terrain_cfg["physics_enabled"] = False
     elif scene_cfg.get("resolver") == "go2":
         scene_cfg["asset_path"] = GO2_AGENT_ASSET_PATH
+        scene_cfg["spawn_if_missing"] = True
+        scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
+        terrain_cfg = task_cfg.get("terrain")
+        if isinstance(terrain_cfg, dict) and terrain_cfg.get("terrain_type") == "plane":
+            terrain_cfg["physics_enabled"] = False
+    elif scene_cfg.get("resolver") == "lite3":
+        scene_cfg["asset_path"] = LITE3_AGENT_ASSET_PATH
         scene_cfg["spawn_if_missing"] = True
         scene_cfg["max_auto_spawn_count"] = max(1, int(task_cfg.get("num_envs", 1)))
         terrain_cfg = task_cfg.get("terrain")

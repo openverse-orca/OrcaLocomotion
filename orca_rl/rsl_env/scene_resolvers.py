@@ -15,6 +15,10 @@ def resolve_scene_binding(resolver: str | Callable[..., Any]) -> Callable[..., A
         from .scene_binding import resolve_go2_scene_binding
 
         return resolve_go2_scene_binding
+    if resolver == "lite3":
+        from .scene_binding import resolve_lite3_scene_binding
+
+        return resolve_lite3_scene_binding
     if "." in resolver:
         import importlib
 
@@ -24,5 +28,5 @@ def resolve_scene_binding(resolver: str | Callable[..., Any]) -> Callable[..., A
             return resolved
     raise ValueError(
         f"Unknown scene binding resolver: {resolver!r}. "
-        "Expected 'g1', 'go2', or import path."
+        "Expected 'g1', 'go2', 'lite3', or import path."
     )

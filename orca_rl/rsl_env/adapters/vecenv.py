@@ -168,7 +168,7 @@ def _load_scene_binding_resolver(scene_cfg: dict[str, Any]) -> Callable[..., Any
     if not resolver_path:
         raise ValueError(
             "Task config must define `scene_binding.resolver`, e.g. "
-            "`g1`, `go2`, or an import path."
+            "`g1`, `go2`, `lite3`, or an import path."
         )
     return resolve_scene_binding(resolver_path)
 

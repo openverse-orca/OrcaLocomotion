@@ -67,3 +67,32 @@ GO2_CONFIG = {
         0.8,
     ],
 }
+
+
+LITE3_JOINT_NAMES = [
+    "FL_HipX_joint", "FL_HipY_joint", "FL_Knee_joint",
+    "FR_HipX_joint", "FR_HipY_joint", "FR_Knee_joint",
+    "HL_HipX_joint", "HL_HipY_joint", "HL_Knee_joint",
+    "HR_HipX_joint", "HR_HipY_joint", "HR_Knee_joint",
+]
+
+LITE3_CONFIG = {
+    "base_joint_name": "floating_base",
+    "leg_joint_names": LITE3_JOINT_NAMES,
+    "neutral_joint_angles": {
+        "FL_HipX_joint": 0.0, "FL_HipY_joint": -1.0, "FL_Knee_joint": 1.8,
+        "FR_HipX_joint": 0.0, "FR_HipY_joint": -1.0, "FR_Knee_joint": 1.8,
+        "HL_HipX_joint": 0.0, "HL_HipY_joint": -1.08, "HL_Knee_joint": 1.8,
+        "HR_HipX_joint": 0.0, "HR_HipY_joint": -1.08, "HR_Knee_joint": 1.8,
+    },
+    "actuator_names": [f"{name}_ctrl" for name in LITE3_JOINT_NAMES],
+    "kps": [30.0] * 12,
+    "kds": [1.0] * 12,
+    "motor_effort_limit_list": [24.0, 24.0, 36.0] * 4,
+    "imu_site_name": "imu_site",
+    "contact_site_names": [],
+    "sensor_foot_touch_names": [],
+    "base_contact_body_names": ["TORSO", "FL_HIP", "FR_HIP", "HL_HIP", "HR_HIP"],
+    "foot_body_names": ["FL_FOOT", "FR_FOOT", "HL_FOOT", "HR_FOOT"],
+    "action_scale": [0.125, 0.25, 0.25] * 4,
+}

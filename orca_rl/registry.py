@@ -82,6 +82,12 @@ def _ensure_builtin_tasks() -> None:
         "orca_rl.tasks.velocity.config.go2.rl_cfg:unitree_go2_rough_ppo_runner_cfg",
         "Unitree Go2 velocity tracking with generated rough-terrain metadata.",
     )
+    register_task(
+        "DeepRobotics-Lite3-Flat",
+        "orca_rl.tasks.velocity.config.lite3.env_cfgs:deeprobotics_lite3_flat_env_cfg",
+        "orca_rl.tasks.velocity.config.lite3.rl_cfg:deeprobotics_lite3_flat_ppo_runner_cfg",
+        "Deep Robotics Lite3 velocity tracking on flat terrain.",
+    )
 
 
 def _load_factory(path: str) -> Callable[[], Any]:

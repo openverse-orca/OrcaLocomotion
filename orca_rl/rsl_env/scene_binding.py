@@ -12,7 +12,7 @@ from .model_scanner import (
     require_complete_matches,
     scan_scene_for_template,
 )
-from .robot_configs import GO2_CONFIG
+from .robot_configs import GO2_CONFIG, LITE3_CONFIG
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,10 @@ class SceneBinding:
 
 G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda"
 GO2_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda"
+LITE3_AGENT_ASSET_PATH = os.environ.get(
+    "ORCA_RL_LITE3_ASSET_PATH",
+    "assets/deeprobotics/lite3/prefabs/lite3_usda",
+)
 _PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -53,6 +57,10 @@ GO2_LOCAL_XML_CANDIDATES = [
     / "unitree_go2"
     / "xmls"
     / "scene_go2.xml",
+]
+LITE3_LOCAL_XML_CANDIDATES = [
+    os.environ.get("ORCA_RL_LITE3_XML", ""),
+    _PACKAGE_ROOT / "assets" / "robots" / "deeprobotics_lite3" / "xmls" / "lite3.xml",
 ]
 
 G1_JOINT_SUFFIXES = [
@@ -389,6 +397,104 @@ def resolve_go2_scene_binding(
     robot_config["log_agent_names"] = agent_names
     robot_config["visualize_command_agent_names"] = agent_names
     robot_config["playable_agent_name"] = agent_names[0]
+    return SceneBinding(agent_names=agent_names, robot_config=robot_config)
+
+
+def resolve_lite3_scene_binding(
+    orcagym_addr: str,
+    time_step: float,
+    min_count: int = 1,
+    max_count: int | None = 1,
+    num_envs: int | None = None,
+    *,
+    spawn_if_missing: bool = False,
+    max_auto_spawn_count: int = 1,
+    spawn_agent_name: str = "lite3_000",
+    spawn_height: float = 0.0,
+    asset_path: str = LITE3_AGENT_ASSET_PATH,
+    local_xml_path: str | None = None,
+    local_clone_spacing: float = 2.0,
+    local_xml_output_dir: str | None = None,
+    terrain_cfg: dict | None = None,
+    terrain_seed: int = 1,
+    extra_actors: list[dict] | None = None,
+) -> SceneBinding:
+    desired_count = int(num_envs or min_count)
+    if num_envs is not None:
+        min_count = desired_count
+        max_count = desired_count
+    robot_config = deepcopy(LITE3_CONFIG)
+    if local_xml_path is not None:
+        source_xml_path = resolve_existing_xml_path(local_xml_path, LITE3_LOCAL_XML_CANDIDATES)
+        agent_names = [f"{spawn_agent_name.rsplit('_', 1)[0]}_{index:03d}" for index in range(desired_count)]
+        local_terrain_cfg = prepare_local_terrain_cfg(
+            terrain_cfg, agent_count=desired_count, spacing=float(local_clone_spacing)
+        )
+        model_xml_path = build_local_mjcf_batch(
+            source_xml_path=source_xml_path,
+            agent_names=agent_names,
+            spacing=float(local_clone_spacing),
+            output_dir=local_xml_output_dir,
+            terrain_cfg=local_terrain_cfg,
+            terrain_seed=int(terrain_seed),
+        )
+        robot_config.update(
+            model_name="Lite3",
+            log_agent_names=agent_names,
+            visualize_command_agent_names=agent_names,
+            playable_agent_name=agent_names[0],
+            local_source_xml_path=source_xml_path,
+        )
+        if local_terrain_cfg is not None:
+            robot_config["local_terrain_cfg"] = local_terrain_cfg
+        return SceneBinding(
+            agent_names=agent_names,
+            robot_config=robot_config,
+            model_xml_path=model_xml_path,
+            source="local_mjcf",
+        )
+
+    template = build_suffix_template(
+        model_name="Lite3",
+        joints=[robot_config["base_joint_name"], *robot_config["leg_joint_names"]],
+        actuators=robot_config["actuator_names"],
+        bodies=[*robot_config["base_contact_body_names"], *robot_config["foot_body_names"]],
+    )
+    report = scan_scene_for_template(orcagym_addr=orcagym_addr, time_step=time_step, template=template)
+    if spawn_if_missing and len(report.complete_matches) < desired_count:
+        missing_count = desired_count - len(report.complete_matches)
+        if missing_count > max(0, int(max_auto_spawn_count)):
+            raise RuntimeError(f"Refusing to auto-publish {missing_count} Lite3 actors; raise max_auto_spawn_count.")
+        try:
+            _publish_unitree_scene(
+                orcagym_addr=orcagym_addr,
+                agent_name=spawn_agent_name,
+                spawn_height=float(spawn_height),
+                asset_path=asset_path,
+                agent_count=desired_count,
+                extra_actors=extra_actors,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Lite3 auto-publish failed. Import the bundled Lite3 MJCF as an XML-backed OrcaStudio asset "
+                "and set ORCA_RL_LITE3_ASSET_PATH to its prefab path, or use --local-mujoco. "
+                f"Configured asset_path={asset_path!r}."
+            ) from exc
+        report = scan_scene_for_template(orcagym_addr=orcagym_addr, time_step=time_step, template=template)
+    matches = require_complete_matches(
+        report,
+        min_count=min_count,
+        max_count=max_count,
+        allow_empty_prefix=False,
+        orcagym_addr=orcagym_addr,
+    )
+    agent_names = [match.agent_name for match in matches[:desired_count]]
+    robot_config.update(
+        model_name="Lite3",
+        log_agent_names=agent_names,
+        visualize_command_agent_names=agent_names,
+        playable_agent_name=agent_names[0],
+    )
     return SceneBinding(agent_names=agent_names, robot_config=robot_config)
 
 

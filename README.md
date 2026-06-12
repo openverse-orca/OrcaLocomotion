@@ -1290,3 +1290,20 @@ foot geom / pair-level contact randomization
 ### 8. Contact sensor 还不是完整 manager 抽象
 
 当前 illegal contact 能跑，但还没有完整 `ContactSensorCfg` manager，包括 pair filtering、force threshold、history buffer、per-foot force tensor 等。
+## Play Deep Robotics Lite3 flat policy
+
+The bundled Lite3 checkpoint is the `model_3100` flat-terrain policy trained
+with `unitree_rl_mjlab`.
+
+```bash
+conda run -n orcalab ./play_lite3_flat.sh --local-mujoco
+```
+
+To play in an OrcaLab scene, import
+`orca_rl/assets/robots/deeprobotics_lite3/xmls/lite3.xml` as an XML-backed asset,
+then either place one actor named `lite3_000` in the scene or set its prefab path:
+
+```bash
+ORCA_RL_LITE3_ASSET_PATH=assets/.../lite3_usda \
+  conda run -n orcalab ./play_lite3_flat.sh --remote localhost:50051
+```

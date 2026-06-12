@@ -14,6 +14,7 @@ from .go2 import (
     unitree_go2_rough_env_cfg,
     unitree_go2_rough_ppo_runner_cfg,
 )
+from .lite3 import deeprobotics_lite3_flat_env_cfg, deeprobotics_lite3_flat_ppo_runner_cfg
 
 __all__ = [
     "unitree_g1_flat_env_cfg",
@@ -24,4 +25,6 @@ __all__ = [
     "unitree_go2_ppo_runner_cfg",
     "unitree_go2_rough_env_cfg",
     "unitree_go2_rough_ppo_runner_cfg",
+    "deeprobotics_lite3_flat_env_cfg",
+    "deeprobotics_lite3_flat_ppo_runner_cfg",
 ]
