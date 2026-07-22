@@ -288,6 +288,47 @@ def test_manual_xml_override_applies_Orca_train_profile(tmp_path):
     assert assert_flat_ground_options(model)[0]["name"] == "ground"
 
 
+def test_flat_ground_options_accept_orcalab_float32_round_trip():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <geom name="ground" type="plane" size="0 0 0.01"
+                  friction="1 0.005 0.0001" solref="0.02 1"
+                  solimp="0.9 0.95 0.001 0.5 2" condim="3"/>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    ground_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "ground")
+    model.geom_friction[ground_id] = np.asarray([1.0, 0.005, 0.0001], dtype=np.float32)
+    model.geom_solref[ground_id] = np.asarray([0.02, 1.0], dtype=np.float32)
+    model.geom_solimp[ground_id] = np.asarray(
+        [0.9, 0.95, 0.001, 0.5, 2.0], dtype=np.float32
+    )
+
+    assert assert_flat_ground_options(model)[0]["name"] == "ground"
+
+
+def test_flat_ground_options_still_reject_contact_changes():
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <geom name="ground" type="plane" size="0 0 0.01"
+                  friction="1 0.005 0.0001" solref="0.02 1"
+                  solimp="0.9 0.95 0.001 0.5 2" condim="3"/>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    ground_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "ground")
+    model.geom_solimp[ground_id, 0] = 0.89
+
+    with pytest.raises(RuntimeError, match="ground.solimp"):
+        assert_flat_ground_options(model)
+
+
 def test_manual_xml_override_keeps_downloaded_asset_paths_resolvable(tmp_path):
     source_dir = tmp_path / "orca_download"
     source_dir.mkdir()

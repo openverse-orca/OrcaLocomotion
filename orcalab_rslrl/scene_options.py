@@ -206,9 +206,14 @@ def assert_scene_options(
 def assert_flat_ground_options(
     model: mujoco.MjModel,
     *,
-    atol: float = 1.0e-9,
+    atol: float = 1.0e-6,
 ) -> list[dict[str, Any]]:
-    """Verify every plane geom against the flat locomotion contact contract."""
+    """Verify every plane geom against the flat locomotion contact contract.
+
+    OrcaLab scene values can make a float32 round trip before they are loaded
+    into MuJoCo, so the comparison tolerates representation noise while still
+    rejecting meaningful contact-profile changes.
+    """
 
     planes: list[dict[str, Any]] = []
     mismatches: list[str] = []
