@@ -39,7 +39,7 @@ python -m pip install -e . --no-deps
 1. 打开 OrcaLab 资产平台并登录；
 2. 搜索 `unitree_robots`（作者为 **Orca**）；
 3. 点击 **订阅**，确认状态显示为 **已订阅**；
-4. 刷新或重新启动 OrcaStudio，使资产同步到本地。
+4. 刷新或重新启动 OrcaLab，使资产同步到本地。
 
 默认使用其中的 G1 prefab：
 
@@ -47,7 +47,7 @@ python -m pip install -e . --no-deps
 assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda
 ```
 
-未订阅该资产时，OrcaStudio 无法正确创建和显示 G1。纯 headless 训练使用仓库内置
+未订阅该资产时，OrcaLab 无法正确创建和显示 G1。纯 headless 训练使用仓库内置
 XML/mesh，不需要启动 OrcaStudio。
 
 ## 快速检查
