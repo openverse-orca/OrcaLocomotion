@@ -1,80 +1,104 @@
-# Architecture
+# Orca Warp 架构
 
-## Supported surface
+## 设计目标
 
-OrcaLab-RSLRL follows a strict public/private boundary:
+Orca Warp 对应用只提供一个统一入口：`orca`。训练、检查、性能测试和回放使用同一套
+任务注册与运行配置，调用方不需要了解运行时内部结构。
 
 ```text
-Application
-  ├─ `orca` CLI
-  └─ `orcalab_rslrl.orca` Python API
+应用
+  ├─ orca 命令行
+  └─ orcalab_rslrl.orca Python API
           ↓
-Task registry and validated runtime config
+任务注册表 + OrcaRuntimeConfig
           ↓
 RslRlVecEnvAdapter
           ↓
 ManagerBasedRLEnv
           ↓
-OrcaPhysics contract
+OrcaPhysics
           ↓
-Private GPU physics implementation
+Orca GPU Runtime
+          ├─ 批量训练状态
+          └─ OrcaLab 实时回放
 ```
 
-Everything under `orcalab_rslrl._internal` is an implementation detail and may
-change without deprecation. Product code must not import it. The public
-contract consists of:
+稳定的公共接口包括：
 
-- `OrcaRuntimeConfig`
-- `make_env`, `list_tasks`, and `register_task`
-- `OrcaPhysics`, `OrcaState`, and `OrcaCapabilities` for task authors
+- `OrcaRuntimeConfig`：设备、并行环境数、随机种子和资产覆盖等运行参数；
+- `make_env`、`list_tasks`、`register_task`：环境创建与任务注册；
+- `OrcaPhysics`、`OrcaState`、`OrcaCapabilities`：任务开发所需的状态与能力接口；
+- `orca train/play/inspect/benchmark`：产品命令行入口。
 
-There is intentionally no public backend selector. Backend upgrades must not
-change task configuration, checkpoints, command lines, or MDP terms.
+应用和任务代码不应导入 `orcalab_rslrl._internal`。该目录只承载运行时内部实现，
+不属于公共接口。
 
-## Runtime ownership
+## 模块职责
 
-`ManagerBasedRLEnv` owns the complete step/reset lifecycle. Tasks configure
-commands, observations, rewards, terminations, events, action transforms, and
-decimation. Terms read stable `env.orca` tensor views and never call private
-solver kernels.
+| 模块 | 职责 |
+| --- | --- |
+| `orca` | 公共 API、任务注册、运行配置与命令行入口 |
+| `tasks` | 组合机器人、场景、MDP 与训练器配置 |
+| `envs` | 管理批量环境的 step、reset 与 decimation 生命周期 |
+| `managers` / `mdp` | command、observation、reward、event、termination 与 action term |
+| `robots` / `assets` | 机器人定义、默认姿态及仓库内置训练资产 |
+| `rslrl` | 将 Orca 环境适配为 RSL-RL 向量环境 |
+| `recording` | 记录明确启用的运行数据 |
+| `tools` | 性能检查和开发诊断工具 |
 
-Every runtime state tensor starts with `num_envs`. Stepping, action writes,
-sensor reads, reward computation, termination checks, and local resets remain
-on the configured device. CPU synchronization is permitted only at explicit
-boundaries such as logging, checkpointing, diagnostics, or rendering.
+## 环境生命周期
 
-## Training and rendering
+`ManagerBasedRLEnv` 负责完整的 step/reset 生命周期。任务配置 command、observation、
+reward、termination、event、action transform 和 decimation；各 term 通过 `env.orca`
+读取稳定的批量 tensor，不直接调用运行时内部函数。
 
-Training is headless. RSL-RL sees only `RslRlVecEnvAdapter`; it has no knowledge
-of robot assets or the physics implementation. W&B consumes iteration-level
-aggregates so media and network operations cannot stall rollout collection.
+所有运行状态的首维都是 `num_envs`。动作写入、状态读取、奖励计算、终止判断与局部
+reset 均保留在配置的设备上。只有日志、checkpoint、诊断和实时回放等明确边界允许
+进行 CPU 同步。
 
-OrcaLab rendering consumes batched poses through a separate bridge. It may run
-at a lower frequency than control and can be disabled without changing task
-semantics. Renderer-specific layout offsets never modify physical state.
+## 训练数据流
 
-## Asset policy
+```text
+策略动作
+   ↓
+动作缩放与默认姿态偏移
+   ↓
+Orca 批量 step
+   ↓
+状态、传感器与 command
+   ↓
+observation / reward / termination
+   ↓
+RslRlVecEnvAdapter
+   ↓
+RSL-RL PPO
+```
 
-Released robot XML, meshes, actuator definitions, and default poses live below
-`orcalab_rslrl/assets/robots`. A task must validate all named joints, bodies,
-actuators, and sensors at startup. Missing or reordered names are fatal errors;
-silent index fallback is prohibited.
+训练默认采用 headless 模式。RSL-RL 只依赖 `RslRlVecEnvAdapter`，W&B 只接收按
+iteration 汇总的指标，避免媒体处理和网络操作阻塞 rollout。
 
-External asset paths are explicit overrides through `OrcaRuntimeConfig.asset`
-or CLI `--asset`. A released task must work with packaged assets by default.
+## OrcaLab 实时回放
 
-## Dependency rules
+OrcaLab bridge 从环境读取批量位姿并按 `--render-fps` 推送。渲染频率可以低于控制
+频率，关闭回放连接不会改变任务语义。`--spacing`、`--spawn-range` 和
+`--root-xy-scale` 只改变 OrcaLab 中的显示布局，不修改训练状态。
 
-- `orca`, `envs`, `managers`, `mdp`, and `rslrl` cannot import a concrete
-  physics implementation.
-- Only task factories and private runtime modules construct concrete physics.
-- MDP terms depend on `env.orca`, never private fields.
-- Renderer code may use only public runtime mappings and state views.
-- A new public symbol requires documentation, typing, and a contract test.
+实时回放前必须在 OrcaLab 资产平台订阅作者为 **Orca** 的 `unitree_robots`，并确认
+状态为“已订阅”。训练所需的 XML 与 mesh 随仓库发布，不依赖 OrcaLab 连接。
 
-## Compatibility
+## 资产约束
 
-Version 0.2 establishes the Orca-only surface. Older standalone console scripts
-are consolidated under `orca`; `--mjcf` becomes `--asset`, and the backend
-selection flag is removed. Checkpoints and registered task identifiers remain
-unchanged.
+发布的机器人 XML、mesh、actuator 定义和默认姿态位于
+`orcalab_rslrl/assets/robots`。任务启动时必须检查 joint、body、actuator 和 sensor
+名称；缺失或名称不一致时直接报错，不允许静默回退到固定索引。
+
+`OrcaRuntimeConfig.asset` 或 `--asset` 可显式覆盖训练模型；发布任务默认应能直接使用
+仓库内置资产。`--asset-path` 仅用于指定 OrcaLab 中已订阅的显示资产。
+
+## 扩展约束
+
+- 新任务通过注册表提供独立任务 ID，不修改已有任务的语义；
+- MDP term 只读取 `env.orca` 的公共状态与映射；
+- OrcaLab bridge 只使用公共状态视图，不反向修改环境状态；
+- 新增公共符号时必须同时提供类型标注、文档和接口测试；
+- 运行时内部调整不得改变任务配置、checkpoint、命令行或 MDP term 的使用方式。

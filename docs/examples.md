@@ -45,7 +45,7 @@ orca play --task G1-Velocity-Flat \
 
 ## 5. OrcaLab 批量回放
 
-启动 OrcaStudio 无仿真程序模式后：
+启动 OrcaLab 无仿真程序模式后：
 
 ```bash
 orca play --task G1-Velocity-Flat \
@@ -92,7 +92,7 @@ orca play --task G1-Velocity-Flat \
 
 自定义 XML 必须保持任务使用的 joint、actuator、body 和 sensor 名称。
 
-## 8. 自定义 OrcaStudio 机器人 prefab
+## 8. 自定义 OrcaLab 机器人 prefab
 
 先在 OrcaLab 资产平台订阅 `unitree_robots`。使用其它机器人 prefab 时，也必须先订阅
 该资产所在的资产包。
@@ -104,4 +104,4 @@ orca play --task G1-Velocity-Flat \
   --asset-path assets/<project>/prefabs/<g1_asset>
 ```
 
-`--asset-path` 只影响 OrcaStudio 渲染；物理模型仍由内置 XML 或 `--asset` 决定。
+`--asset-path` 只影响 OrcaLab 渲染；训练模型仍由内置 XML 或 `--asset` 决定。

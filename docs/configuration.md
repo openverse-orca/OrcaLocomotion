@@ -42,11 +42,11 @@ Orca runtime
 | `--checkpoint` | 必填 | RSL-RL checkpoint |
 | `--num-envs` | `300` | 并行回放数量 |
 | `--steps` | `100000` | 最大控制步数 |
-| `--orcalab` | 关闭 | 启用 OrcaStudio 实时渲染 |
+| `--orcalab` | 关闭 | 启用 OrcaLab 实时渲染 |
 | `--orca-addr` | `localhost:50051` | OrcaLab bridge 地址 |
-| `--render-fps` | `30` | OrcaStudio 推流帧率 |
+| `--render-fps` | `30` | OrcaLab 推流帧率 |
 | `--physics-timestep` | 任务默认值 | 回放物理 timestep |
-| `--asset-path` | G1 prefab | OrcaStudio 机器人资产 |
+| `--asset-path` | G1 prefab | OrcaLab 机器人资产 |
 
 ## PPO YAML
 
@@ -92,7 +92,7 @@ env = make_env("G1-Velocity-Flat", config)
 
 | 字段 | 说明 |
 | --- | --- |
-| `asset` | 本地物理 XML；不同于 OrcaStudio 的 `--asset-path` |
+| `asset` | 本地训练 XML；不同于 OrcaLab 的 `--asset-path` |
 | `physics_timestep` | 物理 step；控制周期还会乘以任务 decimation |
 | `play` | 关闭训练噪声和 push，使用回放任务设置 |
 | `seed` | 模型构建及环境随机化种子 |
@@ -117,7 +117,7 @@ env = make_env("G1-Velocity-Flat", config)
 
 ```text
 --asset robot.xml                  # Orca 物理模型
---asset-path assets/.../g1_usda    # OrcaStudio 机器人 prefab
+--asset-path assets/.../g1_usda    # OrcaLab 机器人 prefab
 ```
 
 使用默认 G1 prefab 前，必须先在 OrcaLab 资产平台订阅 `unitree_robots`。

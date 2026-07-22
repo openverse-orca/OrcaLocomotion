@@ -48,7 +48,7 @@ assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda
 ```
 
 未订阅该资产时，OrcaLab 无法正确创建和显示 G1。纯 headless 训练使用仓库内置
-XML/mesh，不需要启动 OrcaStudio。
+XML/mesh，不需要启动 OrcaLab。
 
 ## 快速检查
 
@@ -93,7 +93,7 @@ orca train --task G1-Velocity-Flat \
 
 ## 回放
 
-无 OrcaStudio 的 headless 并行回放：
+不连接 OrcaLab 的 headless 并行回放：
 
 ```bash
 orca play --task G1-Velocity-Flat \
@@ -101,7 +101,7 @@ orca play --task G1-Velocity-Flat \
   --num-envs 300 --device cuda:0
 ```
 
-启动 OrcaStudio 后，依次选择 **运行** → **开始模拟** →
+启动 OrcaLab 后，依次选择 **运行** → **开始模拟** →
 **无仿真程序启动** → **启动**，再运行：
 
 ```bash
@@ -165,7 +165,7 @@ orcalab_rslrl/assets/robots/unitree_g1/
 ```
 
 - `--asset <local.xml>`：覆盖本地训练物理模型。
-- `--asset-path <orca_asset_path>`：覆盖 OrcaStudio 中发布的可视化 prefab。
+- `--asset-path <orca_asset_path>`：覆盖 OrcaLab 中已订阅的可视化 prefab。
 
 ## 验证
 
