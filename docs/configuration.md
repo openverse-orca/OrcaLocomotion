@@ -46,9 +46,7 @@ Orca runtime
 | `--orca-addr` | `localhost:50051` | OrcaLab bridge 地址 |
 | `--render-fps` | `30` | OrcaStudio 推流帧率 |
 | `--physics-timestep` | 任务默认值 | 回放物理 timestep |
-| `--terrain-kind` | `flat` | `flat` 或 `stair-mid-flat` |
 | `--asset-path` | G1 prefab | OrcaStudio 机器人资产 |
-| `--terrain-asset-path` | 无 | OrcaStudio 地形资产 |
 
 ## PPO YAML
 
@@ -87,7 +85,6 @@ config = OrcaRuntimeConfig(
     play=False,
     asset=None,
     physics_timestep=0.005,
-    terrain="flat",
     seed=1,
 )
 env = make_env("G1-Velocity-Flat", config)
@@ -97,7 +94,6 @@ env = make_env("G1-Velocity-Flat", config)
 | --- | --- |
 | `asset` | 本地物理 XML；不同于 OrcaStudio 的 `--asset-path` |
 | `physics_timestep` | 物理 step；控制周期还会乘以任务 decimation |
-| `terrain` | 本地物理地形，不会自动发布 OrcaStudio prefab |
 | `play` | 关闭训练噪声和 push，使用回放任务设置 |
 | `seed` | 模型构建及环境随机化种子 |
 
@@ -122,8 +118,9 @@ env = make_env("G1-Velocity-Flat", config)
 ```text
 --asset robot.xml                  # Orca 物理模型
 --asset-path assets/.../g1_usda    # OrcaStudio 机器人 prefab
---terrain-asset-path assets/...    # OrcaStudio 地形 prefab
 ```
+
+使用默认 G1 prefab 前，必须先在 OrcaLab 资产平台订阅 `unitree_robots`。
 
 修改机器人资产后必须检查 joint、actuator、body 和 sensor 名称。名称不一致会在环境创建
 阶段报错，不应通过修改索引绕过。

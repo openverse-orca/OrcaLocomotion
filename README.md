@@ -32,9 +32,23 @@ python -m pip install -r requirements.txt
 python -m pip install -e . --no-deps
 ```
 
-> **OrcaLab 前置条件：** 实时回放需要启动 OrcaStudio，并订阅
-> `unitree_robots` 资产。默认 G1 prefab 为
-> `assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda`。
+## OrcaLab 资产订阅（回放前必做）
+
+使用 OrcaLab 实时回放前，必须在 OrcaLab 资产平台订阅 **`unitree_robots`**：
+
+1. 打开 OrcaLab 资产平台并登录；
+2. 搜索 `unitree_robots`（作者为 **Orca**）；
+3. 点击 **订阅**，确认状态显示为 **已订阅**；
+4. 刷新或重新启动 OrcaStudio，使资产同步到本地。
+
+默认使用其中的 G1 prefab：
+
+```text
+assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda
+```
+
+未订阅该资产时，OrcaStudio 无法正确创建和显示 G1。纯 headless 训练使用仓库内置
+XML/mesh，不需要启动 OrcaStudio。
 
 ## 快速检查
 
@@ -116,7 +130,7 @@ orca play --task G1-Velocity-Flat \
 | 任务参数 | `orcalab_rslrl/tasks/` | MDP、奖励、观测、随机化、终止条件 |
 
 常用参数、优先级和 Python 配置方式见
-[配置指南](docs/configuration.md)。训练、回放、地形与自定义资产的完整命令见
+[配置指南](docs/configuration.md)。训练、回放与自定义资产的完整命令见
 [案例手册](docs/examples.md)。
 
 ## Python API
@@ -152,9 +166,6 @@ orcalab_rslrl/assets/robots/unitree_g1/
 
 - `--asset <local.xml>`：覆盖本地训练物理模型。
 - `--asset-path <orca_asset_path>`：覆盖 OrcaStudio 中发布的可视化 prefab。
-- `--terrain-asset-path <orca_asset_path>`：发布对应的 OrcaStudio 地形 prefab。
-
-本地物理地形和 OrcaStudio 可视化地形必须匹配，否则可能出现穿模或悬空。
 
 ## 验证
 
