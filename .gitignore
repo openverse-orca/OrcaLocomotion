@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+logs/
+wandb/
+
+# Local environments and editor state.
+.env
+.venv/
+.idea/
+.vscode/
+.DS_Store
+
+# Generated experiments and media.
+*.pt
+*.pth
+*.onnx
+*.log
+*.mp4
+*.avi
+*.pptx
+OrcaLab-RSLRL*PPT/
