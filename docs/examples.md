@@ -34,7 +34,21 @@ orca train --task G1-Velocity-Flat \
   --log-dir logs/g1_flat_resume
 ```
 
-## 4. Headless 并行回放
+## 4. 训练时实时渲染
+
+先启动 OrcaLab 无仿真程序模式，再运行：
+
+```bash
+orca train --task G1-Velocity-Flat \
+  --num-envs 4096 --device cuda:0 \
+  --orcalab --render-num-envs 16 --render-fps 30 \
+  --wandb-mode online
+```
+
+首次执行会发布 16 个机器人 actor；后续复用场景可增加 `--no-publish`。实时渲染会降低
+训练吞吐量，性能测试时不要启用。
+
+## 5. Headless 并行回放
 
 ```bash
 orca play --task G1-Velocity-Flat \
@@ -43,7 +57,7 @@ orca play --task G1-Velocity-Flat \
   --device cuda:0 --no-realtime
 ```
 
-## 5. OrcaLab 批量回放
+## 6. OrcaLab 批量回放
 
 启动 OrcaLab 无仿真程序模式后：
 
@@ -56,7 +70,7 @@ orca play --task G1-Velocity-Flat \
 
 首次执行会发布机器人场景。后续复用已发布场景时可增加 `--no-publish`。
 
-## 6. 密集排列 300 个机器人
+## 7. 密集排列 300 个机器人
 
 ```bash
 orca play --task G1-Velocity-Flat \
@@ -71,7 +85,7 @@ orca play --task G1-Velocity-Flat \
 - `--spawn-range`：布局中心区域半宽；
 - `--root-xy-scale`：仅压缩渲染层 root x/y 位移，不修改物理状态。
 
-## 7. 自定义 G1 XML
+## 8. 自定义 G1 XML
 
 训练：
 
@@ -92,7 +106,7 @@ orca play --task G1-Velocity-Flat \
 
 自定义 XML 必须保持任务使用的 joint、actuator、body 和 sensor 名称。
 
-## 8. 自定义 OrcaLab 机器人 prefab
+## 9. 自定义 OrcaLab 机器人 prefab
 
 先在 OrcaLab 资产平台订阅 `unitree_robots`。使用其它机器人 prefab 时，也必须先订阅
 该资产所在的资产包。

@@ -31,9 +31,17 @@ Orca runtime
 | `--asset` | 内置 G1 XML | 本地机器人模型覆盖 |
 | `--wandb-mode` | `online` | `online`、`offline` 或 `disabled` |
 | `--check-for-nan` | 关闭 | 每 step 检查 NaN，会降低性能 |
+| `--orcalab` | 关闭 | 训练时启用 OrcaLab 实时渲染 |
+| `--render-num-envs` | `16` | OrcaLab 中显示的训练环境数 |
+| `--render-fps` | `30` | OrcaLab 最大推流帧率 |
+| `--orca-addr` | `localhost:50051` | OrcaLab bridge 地址 |
+| `--asset-path` | G1 prefab | OrcaLab 机器人资产 |
 
 命令行的 `--iterations` 优先于 YAML 中的 `max_iterations`。其它 PPO 参数由
 `--runner-config` 指定的 YAML 提供。
+
+训练渲染只读取前 `--render-num-envs` 个环境的位姿，不改变训练状态。渲染需要进行设备
+同步并占用网络带宽，因此默认关闭。
 
 ### 回放
 

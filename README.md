@@ -32,9 +32,9 @@ python -m pip install -r requirements.txt
 python -m pip install -e . --no-deps
 ```
 
-## OrcaLab 资产订阅（回放前必做）
+## OrcaLab 资产订阅（实时渲染前必做）
 
-使用 OrcaLab 实时回放前，必须在 OrcaLab 资产平台订阅 **`unitree_robots`**：
+使用 OrcaLab 实时查看训练或回放前，必须在 OrcaLab 资产平台订阅 **`unitree_robots`**：
 
 1. 打开 OrcaLab 资产平台并登录；
 2. 搜索 `unitree_robots`（作者为 **Orca**）；
@@ -90,6 +90,16 @@ orca train --task G1-Velocity-Flat \
   --resume logs/rsl_rl/model_100.pt \
   --num-envs 4096 --device cuda:0
 ```
+
+训练时连接 OrcaLab 实时查看前 16 个环境：
+
+```bash
+orca train --task G1-Velocity-Flat \
+  --num-envs 4096 --device cuda:0 \
+  --orcalab --render-num-envs 16 --render-fps 30
+```
+
+实时渲染会产生 GPU 到 CPU 同步和网络开销，正式性能训练建议关闭 `--orcalab`。
 
 ## 回放
 
