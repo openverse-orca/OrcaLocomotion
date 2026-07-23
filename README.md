@@ -1,7 +1,7 @@
 # OrcaLocomotion · Orca Warp
 
 面向 **OrcaLab** 的 GPU 并行机器人强化学习框架。Orca Warp 将 manager-based
-任务设计、MuJoCo Warp 批量物理、RSL-RL PPO 训练和 OrcaLab 可视化连接在同一条
+任务设计、批量物理、强化学习训练与拓展 和 OrcaLab 可视化连接在同一条
 工作流中：用一个命令训练，用同一 checkpoint 做 headless 或 OrcaLab 回放。
 
 > `orca_warp` 是专注 OrcaLab 的实现分支。任务代码仅依赖
@@ -9,23 +9,21 @@
 
 ## ✨ 特性
 
-```text
-┌───────────────────────┐       ┌─────────────────────────┐
-│  G1 manager-based MDP │       │       RSL-RL PPO        │
-│ commands · rewards    │ ───▶  │ GPU-parallel rollouts   │
-│ observations · events │       │ checkpoints · W&B       │
-└───────────┬───────────┘       └───────────┬─────────────┘
-            │                                │
-            └──────── Orca Warp ────────────┘
-                         │
-                         ▼
-                OrcaLab live playback
+```mermaid
+flowchart TB
+    MDP["G1 manager-based MDP<br/>commands · rewards<br/>observations · events"]
+    PPO["RSL-RL PPO<br/>GPU-parallel rollouts<br/>checkpoints · W&amp;B"]
+    WARP["Orca Warp"]
+    PLAYBACK["OrcaLab live playback"]
+
+    MDP --> WARP
+    PPO --> WARP
+    WARP --> PLAYBACK
 ```
 
-- **GPU 并行训练**：基于 MuJoCo Warp 的批量环境与 RSL-RL PPO。
-- **单一任务接口**：训练、检查、性能测试和回放均通过 `orca` CLI 进入。
-- **两种回放方式**：高吞吐 headless 回放，或连接 OrcaLab 进行实时可视化。
-- **清晰的产品边界**：任务通过稳定的 `orcalab_rslrl.orca` API 访问 Orca 运行时。
+- **GPU 并行训练**：基于Orca_Warp的批量环境与可拓展的强化学习仓库。
+- **单一任务接口**：训练、检查、性能测试和回放均通过 `orca` Cli 进入。
+- **清晰边界**：任务通过稳定的 `orcalab_rslrl.orca` API 访问 Orca 运行时。
 
 ## 支持的任务
 
