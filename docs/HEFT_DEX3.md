@@ -82,9 +82,14 @@ ORCA_HEFT_VENV=/data/venvs/orca-heft \
   action 列表。
 - 手指抖动：启动日志应出现 `G1 Dex3 passive mode`，并显示 14 个 hand actuator 被禁用。
 
-## HEFT 引用
+## Citation
 
-G1 PMG 策略和 `walk1/walk2/walk3` 动作来自
-[Axellwppr/motion_tracking](https://github.com/Axellwppr/motion_tracking) 的 `sim2real` 分支，
-固定版本为 [`0d5ba31e33397f3543d350d98b637e26d92f470a`](https://github.com/Axellwppr/motion_tracking/commit/0d5ba31e33397f3543d350d98b637e26d92f470a)，
-采用 MIT License；Copyright (c) 2026 Axell。
+@misc{liu2026heftheavypayloadfullsizehumanoid,
+      title={HEFT: Heavy-Payload Full-size Humanoid Teleoperation with Privileged Motion Guidance and Windowed Payload Curriculum},
+      author={Chenxin Liu and Qingzhou Lu and Guangxiao Yang and Xuanyang Shi and Chenghan Yang and Yanjiang Guo and Jianyu Chen},
+      year={2026},
+      eprint={2607.02332},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2607.02332},
+}
