@@ -1,4 +1,4 @@
-"""Unified public ``orca`` command."""
+"""Unified public ``orcarl`` command."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from .. import __version__
 
 
 def _run(module_main, command: str, args: list[str]) -> None:
-    sys.argv = [f"orca {command}", *args]
+    sys.argv = [f"orcarl {command}", *args]
     module_main()
 
 
@@ -28,7 +28,7 @@ def main() -> None:
         return
 
     parser = argparse.ArgumentParser(
-        prog="orca",
+        prog="orcarl",
         description="Train, inspect, and play robot-learning tasks with Orca.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -40,7 +40,7 @@ def main() -> None:
         return
     if args.command == "list":
         if remainder:
-            parser.error("orca list takes no arguments")
+            parser.error("orcarl list takes no arguments")
         from ..orca import list_tasks
 
         for task in list_tasks():

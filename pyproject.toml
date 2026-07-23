@@ -24,6 +24,7 @@ dependencies = [
   "warp-lang>=1.12",
   "mujoco-warp>=3.5",
   "rsl-rl-lib>=5.0,<5.4",
+  "tensorboard>=2.16",
   "tensordict>=0.7",
   "wandb>=0.17",
   "numpy>=1.26",
@@ -43,7 +44,7 @@ dev = [
 ]
 
 [project.scripts]
-orca = "orcalab_rslrl.tools.cli:main"
+orcarl = "orcalab_rslrl.tools.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["orcalab_rslrl*"]

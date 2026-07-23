@@ -77,6 +77,36 @@ class UniformVelocityCommand:
         self.is_standing_env[env_ids] = torch.rand(n, device=env.device) <= self.rel_standing_envs
         return command
 
+    def sample_masked(self, env, mask: torch.Tensor) -> torch.Tensor:
+        """Sample replacements for a GPU mask without materializing indices.
+
+        ``torch.nonzero`` on a CUDA tensor synchronizes the host because the
+        result has a dynamic length. Command expiration is checked every
+        control step, so using indexed sampling there serializes the rollout.
+        Sampling a full batch and retaining only masked values keeps all state
+        transitions on the device. Random values generated for unmasked
+        environments are deliberately discarded.
+        """
+
+        self._ensure_state(env)
+        if mask.shape != (env.num_envs,):
+            raise ValueError(f"mask shape {tuple(mask.shape)} != {(env.num_envs,)}")
+        mask = mask.to(device=env.device, dtype=torch.bool)
+        n = env.num_envs
+        command = torch.empty(n, 3, device=env.device)
+        command[:, 0].uniform_(*self.ranges.lin_vel_x)
+        command[:, 1].uniform_(*self.ranges.lin_vel_y)
+        command[:, 2].uniform_(*self.ranges.ang_vel_z)
+        command *= (torch.norm(command, dim=1) > 0.1).unsqueeze(1).float()
+        if self.heading_command:
+            heading_target = torch.empty(n, device=env.device).uniform_(*self.ranges.heading)
+            is_heading = torch.rand(n, device=env.device) <= self.rel_heading_envs
+            self.heading_target.copy_(torch.where(mask, heading_target, self.heading_target))
+            self.is_heading_env.copy_(torch.where(mask, is_heading, self.is_heading_env))
+        is_standing = torch.rand(n, device=env.device) <= self.rel_standing_envs
+        self.is_standing_env.copy_(torch.where(mask, is_standing, self.is_standing_env))
+        return command
+
     def update(self, env, name: str) -> None:
         self._ensure_state(env)
         command = env.commands[name]

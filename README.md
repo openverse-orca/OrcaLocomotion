@@ -20,7 +20,7 @@ flowchart TB
     WARP --> PLAYBACK
 ```
 
-- GPU 并行训练、检查、性能测试和回放均通过 `orca` Cli。
+- GPU 并行训练、检查、性能测试和回放均通过 `orcarl` CLI。
 - 同一 checkpoint 支持 headless 批量回放和 OrcaLab 实时可视化。
 
 | 任务 | 机器人 | 训练与回放 |
@@ -53,7 +53,7 @@ python -m pip install -e . --no-deps
 训练速度跟踪策略：
 
 ```bash
-orca train --task G1-Velocity-Flat \
+orcarl train --task G1-Velocity-Flat \
   --num-envs 4096 --device cuda:0 \
   --runner-config configs/train/ppo.yaml \
   --wandb-mode online
@@ -65,7 +65,7 @@ checkpoint 默认保存到 `logs/rsl_rl/`，最终模型为 `model_final.pt`。�
 headless 批量回放：
 
 ```bash
-orca play --task G1-Velocity-Flat \
+orcarl play --task G1-Velocity-Flat \
   --checkpoint logs/rsl_rl/model_final.pt \
   --num-envs 300 --device cuda:0
 ```
@@ -73,7 +73,7 @@ orca play --task G1-Velocity-Flat \
 性能检查：
 
 ```bash
-orca benchmark --task G1-Velocity-Flat --num-envs 4096 --steps 500 --device cuda:0
+orcarl benchmark --task G1-Velocity-Flat --num-envs 4096 --steps 500 --device cuda:0
 ```
 
 ## OrcaLab 可视化
@@ -90,7 +90,7 @@ assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda
 训练时渲染前 16 个环境：
 
 ```bash
-orca train --task G1-Velocity-Flat \
+orcarl train --task G1-Velocity-Flat \
   --num-envs 4096 --device cuda:0 \
   --orcalab --render-num-envs 16 --render-fps 30
 ```
@@ -102,7 +102,7 @@ orca train --task G1-Velocity-Flat \
 
 | 层级 | 入口 | 内容 |
 | --- | --- | --- |
-| 运行参数 | `orca train/play/inspect` | 设备、环境数、checkpoint、渲染和 bridge 地址 |
+| 运行参数 | `orcarl train/play/inspect` | 设备、环境数、checkpoint、渲染和 bridge 地址 |
 | 算法参数 | `configs/train/ppo.yaml` | PPO、网络、rollout 和 W&B |
 | 任务参数 | `orcalab_rslrl/tasks/` | MDP、奖励、观测、随机化与终止条件 |
 

@@ -117,11 +117,18 @@ class ManagerBasedRLEnv:
                 time_left = self.command_time_left[name]
                 time_left -= self.step_dt
                 expired = time_left <= 0.0
-                # Sample only expired envs: stateful commands (heading/standing
-                # flags) must not be reshuffled for envs that keep their command.
-                expired_ids = expired.nonzero(as_tuple=False).squeeze(-1)
-                if expired_ids.numel():
-                    self.commands[name][expired_ids] = command.func(self, expired_ids).to(self.device)
+                sampler = getattr(getattr(command.func, "__self__", None), "sample_masked", None)
+                if sampler is not None:
+                    # The built-in velocity command avoids CUDA ``nonzero`` here;
+                    # see UniformVelocityCommand.sample_masked().
+                    sampled = sampler(self, expired).to(self.device)
+                    self.commands[name].copy_(torch.where(expired[:, None], sampled, self.commands[name]))
+                else:
+                    # Third-party commands retain indexed, sample-only-expired
+                    # semantics until they opt into ``sample_masked``.
+                    expired_ids = expired.nonzero(as_tuple=False).squeeze(-1)
+                    if expired_ids.numel():
+                        self.commands[name][expired_ids] = command.func(self, expired_ids).to(self.device)
                 fresh = torch.empty(self.num_envs, device=self.device).uniform_(
                     *command.resampling_time_range
                 )

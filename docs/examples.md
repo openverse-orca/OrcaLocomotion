@@ -7,7 +7,7 @@
 使用少量环境和 iteration 验证完整训练链路：
 
 ```bash
-orca train --task G1-Velocity-Flat \
+orcarl train --task G1-Velocity-Flat \
   --num-envs 256 --iterations 3 \
   --device cuda:0 --wandb-mode disabled \
   --log-dir logs/smoke
@@ -18,7 +18,7 @@ orca train --task G1-Velocity-Flat \
 ## 2. 标准训练
 
 ```bash
-orca train --task G1-Velocity-Flat \
+orcarl train --task G1-Velocity-Flat \
   --num-envs 4096 --device cuda:0 \
   --runner-config configs/train/ppo.yaml \
   --log-dir logs/g1_flat \
@@ -28,7 +28,7 @@ orca train --task G1-Velocity-Flat \
 ## 3. 断点续训
 
 ```bash
-orca train --task G1-Velocity-Flat \
+orcarl train --task G1-Velocity-Flat \
   --resume logs/g1_flat/model_100.pt \
   --num-envs 4096 --device cuda:0 \
   --log-dir logs/g1_flat_resume
@@ -39,7 +39,7 @@ orca train --task G1-Velocity-Flat \
 先启动 OrcaLab 无仿真程序模式，再运行：
 
 ```bash
-orca train --task G1-Velocity-Flat \
+orcarl train --task G1-Velocity-Flat \
   --num-envs 4096 --device cuda:0 \
   --orcalab --render-num-envs 16 --render-fps 30 \
   --wandb-mode online
@@ -51,7 +51,7 @@ orca train --task G1-Velocity-Flat \
 ## 5. Headless 并行回放
 
 ```bash
-orca play --task G1-Velocity-Flat \
+orcarl play --task G1-Velocity-Flat \
   --checkpoint logs/g1_flat/model_final.pt \
   --num-envs 300 --steps 10000 \
   --device cuda:0 --no-realtime
@@ -62,7 +62,7 @@ orca play --task G1-Velocity-Flat \
 启动 OrcaLab 无仿真程序模式后：
 
 ```bash
-orca play --task G1-Velocity-Flat \
+orcarl play --task G1-Velocity-Flat \
   --checkpoint logs/g1_flat/model_final.pt \
   --num-envs 300 --device cuda:0 \
   --orcalab --render-fps 30
@@ -73,7 +73,7 @@ orca play --task G1-Velocity-Flat \
 ## 7. 密集排列 300 个机器人
 
 ```bash
-orca play --task G1-Velocity-Flat \
+orcarl play --task G1-Velocity-Flat \
   --checkpoint logs/g1_flat/model_final.pt \
   --num-envs 300 --device cuda:0 --orcalab \
   --spacing 0.6 \
@@ -90,7 +90,7 @@ orca play --task G1-Velocity-Flat \
 训练：
 
 ```bash
-orca train --task G1-Velocity-Flat \
+orcarl train --task G1-Velocity-Flat \
   --asset /absolute/path/to/g1.xml \
   --num-envs 4096 --device cuda:0
 ```
@@ -98,7 +98,7 @@ orca train --task G1-Velocity-Flat \
 回放时应使用同一模型：
 
 ```bash
-orca play --task G1-Velocity-Flat \
+orcarl play --task G1-Velocity-Flat \
   --asset /absolute/path/to/g1.xml \
   --checkpoint logs/rsl_rl/model_final.pt \
   --num-envs 300 --device cuda:0
@@ -112,7 +112,7 @@ orca play --task G1-Velocity-Flat \
 该资产所在的资产包。
 
 ```bash
-orca play --task G1-Velocity-Flat \
+orcarl play --task G1-Velocity-Flat \
   --checkpoint logs/rsl_rl/model_final.pt \
   --orcalab \
   --asset-path assets/<project>/prefabs/<g1_asset>

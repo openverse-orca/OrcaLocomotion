@@ -2,12 +2,12 @@
 
 ## 设计目标
 
-Orca Warp 对应用只提供一个统一入口：`orca`。训练、检查、性能测试和回放使用同一套
+Orca Warp 对应用只提供一个统一入口：`orcarl`。训练、检查、性能测试和回放使用同一套
 任务注册与运行配置，调用方不需要了解运行时内部结构。
 
 ```text
 应用
-  ├─ orca 命令行
+  ├─ orcarl 命令行
   └─ orcalab_rslrl.orca Python API
           ↓
 任务注册表 + OrcaRuntimeConfig
@@ -28,7 +28,7 @@ Orca GPU Runtime
 - `OrcaRuntimeConfig`：设备、并行环境数、随机种子和资产覆盖等运行参数；
 - `make_env`、`list_tasks`、`register_task`：环境创建与任务注册；
 - `OrcaPhysics`、`OrcaState`、`OrcaCapabilities`：任务开发所需的状态与能力接口；
-- `orca train/play/inspect/benchmark`：产品命令行入口。
+- `orcarl train/play/inspect/benchmark`：产品命令行入口。
 
 应用和任务代码不应导入 `orcalab_rslrl._internal`。该目录只承载运行时内部实现，
 不属于公共接口。
@@ -37,7 +37,8 @@ Orca GPU Runtime
 
 | 模块 | 职责 |
 | --- | --- |
-| `orca` | 公共 API、任务注册、运行配置与命令行入口 |
+| `orca` | 公共 Python API、任务注册与运行配置 |
+| `orcarl` | 公共命令行入口 |
 | `tasks` | 组合机器人、场景、MDP 与训练器配置 |
 | `envs` | 管理批量环境的 step、reset 与 decimation 生命周期 |
 | `managers` / `mdp` | command、observation、reward、event、termination 与 action term |

@@ -62,7 +62,7 @@ Orca runtime
 
 ```bash
 cp configs/train/ppo.yaml configs/train/ppo_experiment.yaml
-orca train --runner-config configs/train/ppo_experiment.yaml
+orcarl train --runner-config configs/train/ppo_experiment.yaml
 ```
 
 常用字段：
