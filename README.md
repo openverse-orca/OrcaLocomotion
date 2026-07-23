@@ -70,6 +70,11 @@ SSH/无全局键盘权限时使用：
 ./scripts/check_heft_install.sh --runtime
 ```
 
-策略和三个原始动作来自 HEFT 上游 `sim2real` commit
-`0d5ba31e33397f3543d350d98b637e26d92f470a`，采用 MIT 许可证；详见
-`third_party/heft_motion_tracking/`。所有发布资产都有 SHA-256 校验。
+所有发布资产都有 SHA-256 校验。
+
+## HEFT 引用
+
+本运行包内的 G1 PMG 策略和 `walk1/walk2/walk3` 动作源自
+[Axellwppr/motion_tracking](https://github.com/Axellwppr/motion_tracking) 的 `sim2real` 分支，
+固定版本为 [`0d5ba31e33397f3543d350d98b637e26d92f470a`](https://github.com/Axellwppr/motion_tracking/commit/0d5ba31e33397f3543d350d98b637e26d92f470a)，
+按 MIT License 使用；Copyright (c) 2026 Axell。

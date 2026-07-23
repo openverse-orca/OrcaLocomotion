@@ -40,8 +40,8 @@ ORCA_HEFT_VENV=/data/venvs/orca-heft \
 
 ## OrcaLab 准备
 
-1. 启动 OrcaLab/OrcaStudio，加载 `orcalab_day`。
-2. 在场景中放置 G1 29DoF + Dex3-1；默认 prefab 路径为
+1. 启动 OrcaLab，加载场景。
+2. 订阅资产 G1 29DoF + Dex3-1；默认 prefab 路径为
    `assets/13951baeb514b4b9/default_project/prefabs/g1_pick_usda`。
 3. 仿真程序选择“外部/无仿真程序”，确保 OrcaGym 服务地址可连接。
 
@@ -65,20 +65,11 @@ ORCA_HEFT_VENV=/data/venvs/orca-heft \
 | `R` | 复位机器人并清零命令 |
 | `Q` 或 `Esc` | 退出 |
 
-无全局键盘权限或通过 SSH 运行时可使用终端键盘后端：
-
-```bash
-./play_g1_heft.sh --keyboard-backend terminal
-```
-
 固定命令和自动结束适合联调：
 
 ```bash
 ./play_g1_heft.sh --keyboard-backend none --lin-vel-x 0.5 --seconds 20
 ```
-
-兼容入口 `./play_g1_heft_velocity.sh` 保留，参数与主入口一致。本分支只包含 HEFT G1 + Dex3-1
-运行所需内容。
 
 ## 常见问题
 
@@ -91,8 +82,9 @@ ORCA_HEFT_VENV=/data/venvs/orca-heft \
   action 列表。
 - 手指抖动：启动日志应出现 `G1 Dex3 passive mode`，并显示 14 个 hand actuator 被禁用。
 
-## 资产与许可证
+## HEFT 引用
 
-HEFT 策略和三个原始动作固定来自上游 `sim2real` 分支 commit
-`0d5ba31e33397f3543d350d98b637e26d92f470a`。来源和 MIT 许可证见
-`third_party/heft_motion_tracking/`；完整性校验清单见 `assets/heft/SHA256SUMS`。
+G1 PMG 策略和 `walk1/walk2/walk3` 动作来自
+[Axellwppr/motion_tracking](https://github.com/Axellwppr/motion_tracking) 的 `sim2real` 分支，
+固定版本为 [`0d5ba31e33397f3543d350d98b637e26d92f470a`](https://github.com/Axellwppr/motion_tracking/commit/0d5ba31e33397f3543d350d98b637e26d92f470a)，
+采用 MIT License；Copyright (c) 2026 Axell。
