@@ -60,12 +60,20 @@ class ManagerBasedRLEnv:
         self.reset()
 
     def observations(self) -> dict[str, torch.Tensor]:
+        # Actor and critic commonly share the same ObservationTermCfg object:
+        # the actor applies noise while the critic consumes the clean value.
+        # Cache only those raw values, before group-specific corruption/scale.
+        raw_values: dict[int, torch.Tensor] = {}
         groups = {}
         for name, group in self.cfg.observations.items():
             values = []
             for term in group.terms.values():
                 if isinstance(term, ObservationTermCfg):
-                    value = term.func(self)
+                    cache_key = id(term)
+                    value = raw_values.get(cache_key)
+                    if value is None:
+                        value = term.func(self)
+                        raw_values[cache_key] = value
                     if group.enable_corruption and term.noise is not None:
                         value = value + torch.empty_like(value).uniform_(*term.noise)
                     if term.scale is not None:
