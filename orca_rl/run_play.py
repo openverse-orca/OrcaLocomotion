@@ -58,6 +58,7 @@ def _apply_rough_terrain_play_overrides(task_cfg: dict) -> None:
 
 
 def _apply_play_scene_mode(task_cfg: dict, *, local_mujoco: bool) -> None:
+    task_cfg.setdefault("sim", {})["unitree_play_global_settings"] = True
     task_cfg.setdefault("episode", {})["length_s"] = 1.0e9
     task_cfg.setdefault("observations", {})["add_noise"] = False
     task_cfg.setdefault("randomization", {})["enabled"] = False

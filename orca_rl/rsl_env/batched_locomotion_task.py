@@ -20,6 +20,7 @@ from .reward_manager import FlatVelocityReward, RewardConfig
 from .terrain_runtime import TerrainRuntime
 from .termination_manager import TerminationConfig, TerminationManager
 from .mjwarp_runtime import MjWarpRuntime
+from .mujoco_model_settings import apply_unitree_play_global_settings
 
 
 @dataclass
@@ -123,8 +124,18 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
             headless=self._headless,
         )
 
+        if bool(sim_cfg.get("unitree_play_global_settings", False)):
+            apply_unitree_play_global_settings(self.gym._mjModel)
+            print(
+                "[orca_rl.play] Applied unitree-orca MuJoCo global settings: "
+                "integrator=Euler gravity=(0, 0, -9.81) density=0 viscosity=0 "
+                "wind=(0, 0, 0) noslip_iterations=0 sdf_iterations=10"
+            )
+
         self.nu = self.model.nu
-        self.ctrl = np.zeros(self.nu, dtype=np.float64)
+        initial_ctrl = np.asarray(getattr(self.data, "ctrl", np.zeros(self.nu)), dtype=np.float64).reshape(-1)
+        self.ctrl = initial_ctrl.copy() if initial_ctrl.size == self.nu else np.zeros(self.nu, dtype=np.float64)
+        self._configure_passive_g1_hands()
         if self._sim_backend == "mjwarp":
             self._mjwarp_runtime = MjWarpRuntime(
                 model=self.gym._mjModel,
@@ -156,6 +167,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self.num_actions = self.agents[0].action_mapper.num_actions
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int64)
         self._build_batch_arrays()
+        self._report_control_dimensions()
         self._build_contact_maps()
         debug_cfg = cfg.get("debug_visualization", {})
         self._debug_arrow_visualizers = make_debug_arrow_visualizers(self, debug_cfg)
@@ -234,7 +246,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self._resample_commands()
         torque = self._compute_torques()
 
-        self.ctrl[:] = 0.0
+        self.prepare_control_buffer()
         self.ctrl[self._flat_actuator_ids] = torque.reshape(-1)
         if self._mjwarp_runtime is not None:
             for _ in range(self.decimation):
@@ -344,8 +356,9 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
 
         self.set_joint_qpos(joint_qpos)
         self.set_joint_qvel(joint_qvel)
+        self._reset_passive_g1_hands()
         self._apply_global_randomization(self.agents[int(indices[0])].randomization_state)
-        self.ctrl[:] = 0.0
+        self.prepare_control_buffer()
         if self._mjwarp_runtime is not None:
             self.set_ctrl(self.ctrl)
             self._mjwarp_runtime.sync_from_cpu(self.gym._mjData)
@@ -518,6 +531,9 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self._leg_qvel_indices = np.stack([agent.leg_qvel_indices for agent in self.agents], axis=0)
         self._actuator_ids = np.stack([agent.actuator_ids for agent in self.agents], axis=0)
         self._flat_actuator_ids = self._actuator_ids.reshape(-1)
+        controlled_mask = np.zeros(self.nu, dtype=bool)
+        controlled_mask[self._flat_actuator_ids] = True
+        self._uncontrolled_actuator_ids = np.flatnonzero(~controlled_mask)
         self._nominal_qpos = np.stack([agent.nominal_qpos for agent in self.agents], axis=0)
         self._joint_limit_low = np.stack([agent.joint_limits[:, 0] for agent in self.agents], axis=0)
         self._joint_limit_high = np.stack([agent.joint_limits[:, 1] for agent in self.agents], axis=0)
@@ -527,6 +543,115 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self._kd = np.stack([agent.kd for agent in self.agents], axis=0)
         self._torque_low = np.stack([agent.torque_limits[:, 0] for agent in self.agents], axis=0)
         self._torque_high = np.stack([agent.torque_limits[:, 1] for agent in self.agents], axis=0)
+
+    def prepare_control_buffer(self) -> np.ndarray:
+        """Clear policy-owned channels while preserving all other actuator commands.
+
+        A G1 + Dex3-1 model has 43 actuators, but locomotion owns only the 29
+        body actuators.  Copying the live ctrl buffer first prevents reset and
+        policy steps from overwriting the 14 hand channels.
+        """
+
+        live_ctrl = np.asarray(getattr(self.data, "ctrl", self.ctrl), dtype=np.float64).reshape(-1)
+        if live_ctrl.size == self.nu:
+            self.ctrl[:] = live_ctrl
+        self.ctrl[self._flat_actuator_ids] = 0.0
+        return self.ctrl
+
+    def _configure_passive_g1_hands(self) -> None:
+        """Disable Dex3 drives and stabilize its otherwise passive light links."""
+
+        self._passive_hand_actuator_ids = np.zeros(0, dtype=np.int64)
+        self._passive_hand_dof_ids = np.zeros(0, dtype=np.int64)
+        self._passive_hand_qpos_ids = np.zeros(0, dtype=np.int64)
+        self._passive_hand_target_qpos = np.zeros(0, dtype=np.float64)
+        if str(self.robot_config.get("model_name", "")).lower() != "g1":
+            return
+
+        model = self.gym._mjModel
+        data = self.gym._mjData
+        agent_prefixes = tuple(f"{name}_" for name in self.agent_names)
+        actuator_ids: list[int] = []
+        dof_ids: list[int] = []
+        qpos_ids: list[int] = []
+        open_qpos: list[float] = []
+        for actuator_id in range(model.nu):
+            actuator_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator_id) or ""
+            if "_hand_" not in actuator_name or not actuator_name.startswith(agent_prefixes):
+                continue
+            if model.actuator_trntype[actuator_id] != mujoco.mjtTrn.mjTRN_JOINT:
+                continue
+            joint_id = int(model.actuator_trnid[actuator_id, 0])
+            dof_id = int(model.jnt_dofadr[joint_id])
+            qpos_id = int(model.jnt_qposadr[joint_id])
+            actuator_ids.append(actuator_id)
+            dof_ids.append(dof_id)
+            qpos_ids.append(qpos_id)
+            open_qpos.append(self._dex3_open_joint_position(model, joint_id))
+            model.actuator_gainprm[actuator_id, :] = 0.0
+            model.actuator_biasprm[actuator_id, :] = 0.0
+            open_target = open_qpos[-1]
+            # Keep Dex3 fully open without adding 14 hand actions to the
+            # locomotion ABI or leaving light finger links free to shake the
+            # wrists.
+            model.jnt_stiffness[joint_id] = max(float(model.jnt_stiffness[joint_id]), 10.0)
+            if hasattr(model, "qpos_spring"):
+                model.qpos_spring[qpos_id] = open_target
+            model.dof_damping[dof_id] = max(float(model.dof_damping[dof_id]), 0.3)
+            model.dof_armature[dof_id] = max(float(model.dof_armature[dof_id]), 0.002)
+            model.dof_frictionloss[dof_id] = max(float(model.dof_frictionloss[dof_id]), 0.05)
+            data.ctrl[actuator_id] = 0.0
+            self.ctrl[actuator_id] = 0.0
+
+        if not actuator_ids:
+            return
+        self._passive_hand_actuator_ids = np.asarray(actuator_ids, dtype=np.int64)
+        self._passive_hand_dof_ids = np.asarray(dof_ids, dtype=np.int64)
+        self._passive_hand_qpos_ids = np.asarray(qpos_ids, dtype=np.int64)
+        self._passive_hand_target_qpos = np.asarray(open_qpos, dtype=np.float64)
+        enabled_hand_contact_geoms = 0
+        for geom_id in range(model.ngeom):
+            body_name = mujoco.mj_id2name(
+                model,
+                mujoco.mjtObj.mjOBJ_BODY,
+                int(model.geom_bodyid[geom_id]),
+            ) or ""
+            if "_hand_" not in body_name or not body_name.startswith(agent_prefixes):
+                continue
+            if int(model.geom_contype[geom_id]) or int(model.geom_conaffinity[geom_id]):
+                enabled_hand_contact_geoms += 1
+        self._reset_passive_g1_hands()
+        mujoco.mj_setConst(model, data)
+        print(
+            "[orca_rl.control] G1 Dex3 passive mode: "
+            f"disabled_actuators={len(actuator_ids)}, default_pose=fully_open, "
+            f"contact_geoms={enabled_hand_contact_geoms}, spring>=10.0, "
+            "damping>=0.3, armature>=0.002, frictionloss>=0.05"
+        )
+
+    @staticmethod
+    def _dex3_open_joint_position(model: mujoco.MjModel, joint_id: int) -> float:
+        low, high = np.asarray(model.jnt_range[joint_id], dtype=np.float64)
+        return float(np.clip(0.0, low, high))
+
+    def _reset_passive_g1_hands(self) -> None:
+        if not getattr(self, "_passive_hand_qpos_ids", np.empty(0)).size:
+            return
+        data = self.gym._mjData
+        data.qpos[self._passive_hand_qpos_ids] = self._passive_hand_target_qpos
+        data.qvel[self._passive_hand_dof_ids] = 0.0
+        data.ctrl[self._passive_hand_actuator_ids] = 0.0
+        self.ctrl[self._passive_hand_actuator_ids] = 0.0
+
+    def _report_control_dimensions(self) -> None:
+        model_name = str(self.robot_config.get("model_name", "robot"))
+        if model_name.lower() == "g1" and self.num_actions != 29:
+            raise ValueError(f"G1 locomotion ABI requires 29 actions, got {self.num_actions}.")
+        if self._uncontrolled_actuator_ids.size:
+            print(
+                f"[orca_rl.control] {model_name}: action_dim={self.num_actions}, model_nu={self.nu}, "
+                f"preserved_uncontrolled_actuators={self._uncontrolled_actuator_ids.size}"
+            )
 
     def _build_contact_maps(self) -> None:
         self._body_to_foot_entries: dict[str, list[tuple[int, int]]] = {}

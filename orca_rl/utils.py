@@ -11,13 +11,18 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+VENDORED_UNITREE_MJLAB_ROOT = PROJECT_ROOT / "third_party" / "unitree_rl_mjlab"
 DEFAULT_LOG_ROOT = PROJECT_ROOT / "logs" / "rsl_rl"
 
 
 def ensure_project_root_on_path() -> None:
-    root = str(PROJECT_ROOT)
-    if root not in sys.path:
-        sys.path.insert(0, root)
+    roots = [PROJECT_ROOT]
+    if VENDORED_UNITREE_MJLAB_ROOT.is_dir():
+        roots.append(VENDORED_UNITREE_MJLAB_ROOT)
+    for path in reversed(roots):
+        root = str(path)
+        if root not in sys.path:
+            sys.path.insert(0, root)
 
 
 def _split_config_selector(path: str | Path) -> tuple[str | Path, str | None]:

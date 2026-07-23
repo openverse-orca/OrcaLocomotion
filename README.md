@@ -102,21 +102,22 @@ pip install -r requirements.txt
 如果需要单独安装 OrcaLab 依赖：
 
 ```bash
-pip install orca-lab==26.4.3
+pip install orca-lab==26.6.3
 ```
 
 `requirements.txt` 当前主要依赖：
 
 ```text
-orca-lab==26.4.3
-mujoco==3.5.0
+orca-lab==26.6.3
+mujoco==3.7.0
+numpy==2.2.6
 warp-lang==1.12.0
 mujoco-warp==3.5.0
-rsl-rl-lib>=5.0.1,<5.4.0
-torch>=2.6.0
+rsl-rl-lib==5.0.1
+torch>=2.7.0
 tensordict
 onnx / onnxscript
-tensorboard / wandb
+tensorboard>=2.20.0 / wandb>=0.22.3
 ```
 
 ## 快速命令
@@ -184,6 +185,11 @@ python -m orca_rl.run_train \
 
 OrcaLab scene 中播放 Orca RL checkpoint：
 
+先自行启动 OrcaLab 并加载 `orcalab_day`，仿真程序选择外部/无仿真程序。`orca_rl` 不会启动
+`/home/user/unitree-orca`，该仓库只作为 MuJoCo 参数参考。进入 play 后，当前 runtime model 会应用
+同源项目的 global settings：Euler、`gravity="0 0 -9.81"`、零 density/viscosity/wind、
+`noslip_iterations=0`、`sdf_iterations=10`。
+
 ```bash
 python -m orca_rl.run_play \
   --config Unitree-G1-Flat \
@@ -202,6 +208,16 @@ python -m orca_rl.run_play \
   --ang-vel-z 0.0
 ```
 
+G1 flat checkpoint 键盘 command/reset：
+
+```bash
+./play_g1_mjlab_keyboard.sh
+```
+
+方向键或 `W/A/S/D` 控制平移，`Z/C` 控制转向，空格清零 command，`R` 重置机器人并清零
+command，`Q` 或 `Esc` 退出。脚本默认加载
+`checkpoints/test_model_G1_mjlab_Flat.pt`；本地 MuJoCo 调试可追加 `--local-mujoco`。
+
 不要加 `--local-mujoco`，这样才会播放到 OrcaLab scene 里的 G1。若不传 `--checkpoint`，会自动寻找：
 
 ```text
@@ -211,8 +227,52 @@ third_party/unitree_rl_mjlab/logs/rsl_rl/g1_velocity/*/model_*.pt
 G1 scene binding / auto-publish 默认使用 OrcaLab 资产：
 
 ```text
-assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda
+assets/13951baeb514b4b9/default_project/prefabs/g1_pick_usda
 ```
+
+该 prefab 可以是 G1 29DoF + Dex3-1 的 43-actuator 模型。Locomotion action ABI 仍固定为
+29 维，只绑定 G1 本体执行器；左右 Dex3-1 的 14 个执行器不进入 observation/action，play 和
+reset 也不会覆盖它们的现有 `ctrl`。运行时会禁用 Dex3 position actuator，启动和每次 reset
+默认将双手固定在全部关节零位的完全张开姿态，并给被动手指加入最小
+spring/damping/armature/frictionloss，避免轻量手指在 Euler 积分下出现 `QACC at DOF 35`
+数值发散，也避免自由摆动的手指给腕部引入额外扰动。Dex3 的原始 collision mask 保持开启，
+使不同手指以及手与身体、环境之间正常接触，避免张开姿态出现穿模。
+
+### HEFT G1 + Dex3 velocity command
+
+完整的环境要求、安装、OrcaLab 准备、运行参数和排障见
+[`docs/HEFT_DEX3.md`](docs/HEFT_DEX3.md)。首次部署可直接执行 `./install_heft.sh`。
+
+项目内也适配了 HEFT `sim2real` 分支发布的 G1 PMG ONNX 模型。HEFT 原始 G1 是 29DoF 本体加
+固定橡胶手，并不是 Dex3 action policy；OrcaLab 适配因此继续保持 29 维本体 action ABI，把 Dex3
+固定在带被动弹簧的完全张开姿态，避免手指动作干扰本体的 29 维控制。适配器在当前进程内
+直接跑 ONNX，不会启动 HEFT 的 UDP `deploy.py` / `sim2sim.py`，也不会启动
+`/home/user/unitree-orca`。
+
+启动：
+
+```bash
+./play_g1_heft.sh
+```
+
+方向键或 `W/A/S/D` 选择前进、后退、左移、右移片段，`Z/C` 选择左右转向片段；数字
+`F1/F2/F3` 分别播放原 HEFT `walk1/walk2/walk3`，空格切换到站立，`R` 重置，`Q` 或 `Esc`
+退出。播放器直接跟踪 `assets/heft/recorded_commands/` 中七段
+50 Hz 动作。这些片段由原始本地 G1 29DoF mjlab velocity policy 分别执行固定 command 后录制，
+保存了真实 root 轨迹、朝向和 29 个关节姿态；运行播放器时不再启动 shadow teacher，也不再
+在线拼接 reference。三个原始 walk 从 `assets/heft/motions/` 加载。方向切换使用默认 0.4 秒
+姿态过渡，每段结束会对齐当前位置继续循环。
+`play_g1_heft_velocity.sh` 保留为同一入口的兼容别名。模型和动作来源、固定上游 commit 及 MIT
+许可证见 `third_party/heft_motion_tracking/`。
+
+需要用不同速度重新录制时：
+
+```bash
+./record_g1_mjlab_commands.sh --linear-speed 0.5 --yaw-speed 0.8
+```
+
+录制使用项目内 `checkpoints/test_model_G1_mjlab_Flat.pt` 和本地 29DoF G1 MuJoCo 模型，不连接
+OrcaLab 场景，也不控制 Dex3。
 
 OrcaLab scene 中播放 Unitree/mjlab GO2 checkpoint：
 
@@ -873,7 +933,7 @@ G1 mjlab play 还会打印 contact / sensor 对齐：
 
 G1 的 mjlab 训练配置把脚底 collision 设为 `condim=3`、`priority=1`、主摩擦 `0.6`，其它 collision 设为 `condim=1`。OrcaLab runtime 里的 G1 脚底是左右 ankle roll link 下的 8 个 sphere geom，所以 G1 bridge 会在当前 play 进程里把这些 foot sphere patch 成 mjlab 风格。
 
-如果 `foot_contact_geoms=0`，说明当前 G1 runtime XML 的脚底 geom 结构和已知 `g1_29dof_usda` 不同，需要重新抓 runtime XML。
+如果 `foot_contact_geoms=0`，说明当前 G1 runtime XML 的脚底 geom 结构和已知 G1 模型不同，需要重新抓 runtime XML。
 如果 `imu_gyro_sensors=0`，说明当前 G1 runtime XML 没有暴露 `*_imu_gyro` sensor，bridge 会退回到 qvel 推导的角速度。
 
 GO2 的 mjlab bridge 额外会把 nominal joint pose 对齐到 `unitree_go2/go2_constants.py` 的 `INIT_STATE`：

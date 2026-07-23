@@ -9,6 +9,8 @@ import time
 from .local_mjcf import build_local_mjcf_batch, prepare_local_terrain_cfg, resolve_existing_xml_path
 from .model_scanner import (
     build_suffix_template,
+    match_robot_instances,
+    probe_scene_model,
     require_complete_matches,
     scan_scene_for_template,
 )
@@ -27,7 +29,7 @@ class SceneBinding:
         return self.agent_names[0]
 
 
-G1_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/g1_29dof_usda"
+G1_AGENT_ASSET_PATH = "assets/13951baeb514b4b9/default_project/prefabs/g1_pick_usda"
 GO2_AGENT_ASSET_PATH = "assets/e071469a36d3c8aa/unitree_robots/prefabs/go2_usda"
 LITE3_AGENT_ASSET_PATH = os.environ.get(
     "ORCA_RL_LITE3_ASSET_PATH",
@@ -125,6 +127,15 @@ G1_ACTUATOR_SUFFIXES = [
     "right_wrist_roll",
     "right_wrist_pitch",
     "right_wrist_yaw",
+]
+
+# OrcaLab's locomotion G1 asset drops the ``_joint`` suffix from motor names,
+# while Unitree's official G1 + Dex3-1 MJCF keeps it.  Both models still expose
+# the same 29 body actuators; the additional 14 hand actuators are intentionally
+# not part of either list.
+G1_ACTUATOR_SUFFIX_VARIANTS = [
+    G1_ACTUATOR_SUFFIXES,
+    [f"{name}_joint" for name in G1_ACTUATOR_SUFFIXES],
 ]
 
 G1_DEFAULT_DOF_ANGLES = [
@@ -552,16 +563,9 @@ def resolve_g1_scene_binding(
             source="local_mjcf",
         )
 
-    template = build_suffix_template(
-        model_name="G1",
-        joints=["floating_base_joint", *G1_JOINT_SUFFIXES],
-        actuators=G1_ACTUATOR_SUFFIXES,
-        sensors=["imu_quat", "imu_gyro"],
-    )
-    report = scan_scene_for_template(
+    report, actuator_suffixes = _scan_g1_scene_binding(
         orcagym_addr=orcagym_addr,
         time_step=time_step,
-        template=template,
     )
     if spawn_if_missing and len(report.complete_matches) < desired_count:
         max_auto_spawn_count = max(0, int(max_auto_spawn_count))
@@ -588,10 +592,9 @@ def resolve_g1_scene_binding(
                 f"spawnable path: {asset_path!r}. Drag one G1 actor into the layout manually, or update "
                 "`scene_binding.asset_path` to the spawnable path available in this OrcaStudio project."
             ) from exc
-        report = scan_scene_for_template(
+        report, actuator_suffixes = _scan_g1_scene_binding(
             orcagym_addr=orcagym_addr,
             time_step=time_step,
-            template=template,
         )
 
     _raise_if_g1_scene_has_no_actuators(report, asset_path=asset_path)
@@ -604,11 +607,41 @@ def resolve_g1_scene_binding(
     )
 
     agent_names = [match.agent_name for match in matches[:desired_count]]
+    robot_config["actuator_names"] = list(actuator_suffixes)
     robot_config["model_name"] = "G1"
     robot_config["log_agent_names"] = agent_names
     robot_config["visualize_command_agent_names"] = agent_names
     robot_config["playable_agent_name"] = agent_names[0]
     return SceneBinding(agent_names=agent_names, robot_config=robot_config)
+
+
+def _scan_g1_scene_binding(orcagym_addr: str, time_step: float):
+    """Probe once and accept both OrcaLab and official Unitree actuator names."""
+
+    scene_names = probe_scene_model(orcagym_addr=orcagym_addr, time_step=time_step)
+    candidates = []
+    for actuator_suffixes in G1_ACTUATOR_SUFFIX_VARIANTS:
+        template = build_suffix_template(
+            model_name="G1",
+            joints=["floating_base_joint", *G1_JOINT_SUFFIXES],
+            actuators=actuator_suffixes,
+        )
+        report = match_robot_instances(template, scene_names)
+        candidates.append((report, actuator_suffixes))
+        if report.complete_matches:
+            return report, actuator_suffixes
+
+    def partial_score(candidate) -> int:
+        report, _ = candidate
+        return max(
+            (
+                sum(len(names) for names in match.matched_names.values())
+                for match in report.partial_matches
+            ),
+            default=0,
+        )
+
+    return max(candidates, key=partial_score)
 
 
 def _raise_if_g1_scene_has_no_actuators(report, *, asset_path: str) -> None:

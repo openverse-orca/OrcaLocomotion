@@ -510,7 +510,7 @@ def _step_task_with_mjlab_g1_actions(
     if arm_mode == "neutral" and np.any(spec.arm_joint_mask):
         target_qpos[:, spec.arm_joint_mask] = spec.neutral_qpos[spec.arm_joint_mask]
 
-    task.ctrl[:] = 0.0
+    task.prepare_control_buffer()
     if getattr(task, "_mjlab_position_actuator_aligned", False):
         task.ctrl[task._flat_actuator_ids] = target_qpos.reshape(-1)
     else:
@@ -546,7 +546,7 @@ def _step_task_with_mjlab_go2_actions(task: Any, actions: np.ndarray, spec: Mjla
 
     target_qpos = spec.default_qpos.reshape(1, -1) + actions * spec.scale.reshape(1, -1)
 
-    task.ctrl[:] = 0.0
+    task.prepare_control_buffer()
     if getattr(task, "_mjlab_position_actuator_aligned", False):
         task.ctrl[task._flat_actuator_ids] = target_qpos.reshape(-1)
     else:
