@@ -38,16 +38,15 @@ cd OrcaLocomotion
 conda env create -f environment.yml
 conda activate orcalab-rslrl
 
-# 创建 8 个环境并执行一次零动作 step
-orca inspect --task G1-Velocity-Flat --num-envs 8 --device cuda:0
-```
-
-已有 OrcaLab Python 环境时：
-
-```bash
-python -m pip install -r requirements.txt
+# 单独安装依赖，下载进度和失败信息会直接显示
+python -m pip install --upgrade pip
+python -m pip install --prefer-binary -r requirements.txt
 python -m pip install -e . --no-deps
 ```
+
+`environment.yml` 只创建 Python 环境；大型 GPU 与 OrcaLab 依赖在激活环境后单独安装，
+避免 Conda 在环境创建阶段长时间无输出。已有 OrcaLab Python 环境时，直接执行上面的
+三条 `pip` 命令即可。
 
 ## 🏃 训练与回放
 
