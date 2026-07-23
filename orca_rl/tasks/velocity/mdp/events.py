@@ -35,7 +35,3 @@ def randomize_contact_params():
 
 def push_robot():
     """Apply periodic base-velocity perturbations during the episode."""
-
-
-def randomize_terrain():
-    """Select or reset a rough-terrain tile."""

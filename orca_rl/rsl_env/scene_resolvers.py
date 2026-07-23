@@ -11,22 +11,4 @@ def resolve_scene_binding(resolver: str | Callable[..., Any]) -> Callable[..., A
         from .scene_binding import resolve_g1_scene_binding
 
         return resolve_g1_scene_binding
-    if resolver == "go2":
-        from .scene_binding import resolve_go2_scene_binding
-
-        return resolve_go2_scene_binding
-    if resolver == "lite3":
-        from .scene_binding import resolve_lite3_scene_binding
-
-        return resolve_lite3_scene_binding
-    if "." in resolver:
-        import importlib
-
-        module_name, _, attr_name = resolver.rpartition(".")
-        resolved = getattr(importlib.import_module(module_name), attr_name)
-        if callable(resolved):
-            return resolved
-    raise ValueError(
-        f"Unknown scene binding resolver: {resolver!r}. "
-        "Expected 'g1', 'go2', 'lite3', or import path."
-    )
+    raise ValueError(f"HEFT supports only the 'g1' scene resolver, got {resolver!r}.")

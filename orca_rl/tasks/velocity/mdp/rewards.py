@@ -37,26 +37,6 @@ def feet_slip():
     """Penalty for horizontal foot motion while in contact."""
 
 
-def feet_air_time():
-    """Reward useful swing duration for commanded locomotion."""
-
-
-def foot_clearance():
-    """Reward/penalty shaping foot clearance over rough terrain."""
-
-
-def stand_still():
-    """Penalty on joint motion while the command asks the robot to stand."""
-
-
-def joint_deviation_l1():
-    """Penalty for drifting away from the nominal joint pose."""
-
-
-def body_ang_vel_l2():
-    """Penalty on body angular velocity."""
-
-
 def termination():
     """Terminal penalty."""
 

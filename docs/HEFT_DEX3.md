@@ -12,7 +12,7 @@ Dex3-1 的 14 个手部 actuator 不进入 observation/action，并在运行时�
 - 可运行的 OrcaLab/OrcaStudio，版本 `26.6.3`
 - OrcaStudio 工程中可用的 G1 29DoF + Dex3-1 prefab
 
-模型、动作和依赖总体积较大，首次安装需要可访问 PyPI、MuJoCo 和 NVIDIA Python 包源。
+模型、动作和依赖总体积较大，首次安装需要可访问 PyPI 和 MuJoCo Python 包源。
 
 ## 安装
 
@@ -77,7 +77,8 @@ ORCA_HEFT_VENV=/data/venvs/orca-heft \
 ./play_g1_heft.sh --keyboard-backend none --lin-vel-x 0.5 --seconds 20
 ```
 
-兼容入口 `./play_g1_heft_velocity.sh` 保留，参数与主入口一致。
+兼容入口 `./play_g1_heft_velocity.sh` 保留，参数与主入口一致。本分支只包含 HEFT G1 + Dex3-1
+运行所需内容。
 
 ## 常见问题
 

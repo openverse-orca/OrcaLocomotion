@@ -15,7 +15,3 @@ def base_height():
 
 def base_contact():
     """Terminate on configured non-foot body contact."""
-
-
-def illegal_contact():
-    """Terminate on non-foot contact above a force/contact threshold."""

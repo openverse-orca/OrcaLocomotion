@@ -15,7 +15,7 @@ PYTHON_BIN="${PYTHON_BIN:-$(command -v python3 || command -v python)}"
 
 ORCA_HEFT_PYTHON="${PYTHON_BIN}" "${ROOT_DIR}/scripts/check_heft_install.sh" --runtime
 
-export PYTHONPATH="${ROOT_DIR}:${ROOT_DIR}/third_party/unitree_rl_mjlab:${PYTHONPATH:-}"
+export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
 
 exec "${PYTHON_BIN}" -m orca_rl.play_g1_heft_velocity \
   --policy "${ROOT_DIR}/checkpoints/heft/G1_PMG/policy.onnx" \

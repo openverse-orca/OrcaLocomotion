@@ -20,7 +20,7 @@ class SubTerrainCfg:
 
 @dataclass(frozen=True)
 class TerrainGeneratorCfg:
-    """Lightweight rough-terrain generator metadata inspired by mjlab/IsaacLab."""
+    """Lightweight rough-terrain generator metadata."""
 
     num_rows: int = 10
     num_cols: int = 20

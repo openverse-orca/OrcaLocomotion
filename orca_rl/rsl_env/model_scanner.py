@@ -14,7 +14,6 @@ class AssetUiHint:
 
 
 ASSET_UI_HINTS: dict[str, AssetUiHint] = {
-    "go2": AssetUiHint(display_name="Go2 quadruped", asset_search_name="go2"),
     "g1": AssetUiHint(display_name="G1 humanoid", asset_search_name="g1"),
     "G1": AssetUiHint(display_name="G1 humanoid", asset_search_name="g1"),
 }

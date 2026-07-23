@@ -6,7 +6,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ContactMatchCfg:
-    """Mjlab-style contact selector metadata."""
+    """Contact selector metadata."""
 
     mode: str
     pattern: str | tuple[str, ...]

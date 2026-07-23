@@ -8,7 +8,6 @@ from typing import Any
 import mujoco
 import numpy as np
 import onnxruntime as ort
-import torch
 
 
 HEFT_JOINT_NAMES = (
@@ -288,16 +287,6 @@ class _HeftRuntime:
         self.boot_value = 25
 
 
-@dataclass
-class _VelocityReferenceState:
-    root_pos_history: np.ndarray
-    root_quat_history: np.ndarray
-    joint_pos_history: np.ndarray
-    yaw: float
-    phase: float
-    filtered_command: np.ndarray
-    moving_blend: float
-
 
 class HeftG1OrcaPlayBridge:
     """Run the upstream HEFT G1 PMG policy directly in an OrcaLab G1 scene."""
@@ -409,11 +398,7 @@ class HeftG1OrcaPlayBridge:
             if task._render_mode == "human":
                 task.render()
             task.episode_lengths += 1
-            self.env.episode_length_buf[start:stop] = torch.as_tensor(
-                task.episode_lengths,
-                dtype=torch.long,
-                device=self.env.device,
-            )
+            self.env.episode_length_buf[start:stop] = task.episode_lengths
             start = stop
 
     def progress(self) -> tuple[int, int]:
@@ -526,9 +511,6 @@ class HeftG1OrcaPlayBridge:
         model = getattr(getattr(task, "gym", None), "_mjModel", None)
         if model is None:
             raise ValueError("HEFT play requires a CPU MuJoCo model.")
-        if getattr(task, "_mjwarp_runtime", None) is not None:
-            raise ValueError("HEFT OrcaLab play does not currently support the MJWarp backend.")
-
         default_env = HEFT_DEFAULT_QPOS[heft_to_env]
         kp_env = HEFT_KP[heft_to_env]
         kd_env = HEFT_KD[heft_to_env]
@@ -585,217 +567,18 @@ class HeftG1OrcaPlayBridge:
         task.update_data()
 
 
-class HeftG1VelocityCommandBridge(HeftG1OrcaPlayBridge):
-    """Encode body velocity commands as online HEFT motion references.
-
-    HEFT is a motion-tracking policy, so velocity is represented by the future
-    root trajectory.  A short, steady section of the published walk1 motion is
-    used only as a cyclic joint/root-height template.
-    """
-
-    def __init__(
-        self,
-        env: Any,
-        *,
-        policy_path: str | Path,
-        motion_dir: str | Path,
-        gait_motion: str = "walk1_subject1",
-        gait_start: int = 285,
-        gait_frames: int = 75,
-        command_smoothing_s: float = 0.15,
-        reference_gain: float | tuple[float, float, float] = (1.1, 1.3, 1.05),
-        onnx_threads: int = 4,
-    ) -> None:
-        super().__init__(
-            env,
-            policy_path=policy_path,
-            motion_dir=motion_dir,
-            transition_steps=0,
-            onnx_threads=onnx_threads,
-        )
-        if not np.isclose(float(env.tasks[0].control_dt), 0.02):
-            raise ValueError(f"HEFT velocity command requires dt=0.020, got {env.tasks[0].control_dt}")
-        motion = self.motions.get(gait_motion)
-        start = int(gait_start)
-        stop = start + int(gait_frames)
-        if start < 0 or stop > motion.joint_pos.shape[0] or gait_frames < 2:
-            raise ValueError(
-                f"Invalid HEFT gait window [{start}:{stop}] for {gait_motion} "
-                f"with {motion.joint_pos.shape[0]} frames."
-            )
-        self.gait_motion = str(gait_motion)
-        self.gait_start = start
-        self.gait_frames = int(gait_frames)
-        self._gait_joint = motion.joint_pos[start:stop].copy()
-        self._gait_root_z = motion.root_pos[start:stop, 2].copy()
-        self._gait_root_rp = np.stack(
-            [
-                _quat_mul(_quat_conjugate(_yaw_quat(quat)), quat)
-                for quat in motion.root_quat[start:stop]
-            ],
-            axis=0,
-        ).astype(np.float32)
-        displacement = motion.root_pos[stop - 1, :2] - motion.root_pos[start, :2]
-        duration = (self.gait_frames - 1) * 0.02
-        self.nominal_gait_speed = max(0.1, float(np.linalg.norm(displacement) / duration))
-        self.command_smoothing_s = max(0.0, float(command_smoothing_s))
-        reference_gain_array = np.asarray(reference_gain, dtype=np.float64)
-        if reference_gain_array.ndim == 0:
-            reference_gain_array = np.repeat(reference_gain_array.reshape(1), 3)
-        self.reference_gain = np.maximum(reference_gain_array.reshape(3), 0.1)
-        self.commands = np.zeros((len(self.runtime), 3), dtype=np.float64)
-        self._velocity_state: list[_VelocityReferenceState] = []
-        self.current_motion = "velocity_command"
-
-    def reset(self, motion_name: str | None = None, *, reset_env: bool = True) -> None:
-        del motion_name
-        if reset_env:
-            self.env.reset()
-        self.commands.fill(0.0)
-        states = self._read_states()
-        self._velocity_state = []
-        for runtime, state in zip(self.runtime, states):
-            qpos, _qvel, root_quat, root_pos, _root_angvel = state
-            runtime.reset_history()
-            yaw = _yaw_angle(root_quat)
-            self._velocity_state.append(
-                _VelocityReferenceState(
-                    root_pos_history=np.repeat(root_pos.reshape(1, 3), 17, axis=0).astype(np.float32),
-                    root_quat_history=np.repeat(root_quat.reshape(1, 4), 17, axis=0).astype(np.float32),
-                    joint_pos_history=np.repeat(qpos.reshape(1, 29), 17, axis=0).astype(np.float32),
-                    yaw=yaw,
-                    phase=0.0,
-                    filtered_command=np.zeros(3, dtype=np.float64),
-                    moving_blend=0.0,
-                )
-            )
-        self.current_motion = "velocity_command"
-
-    def set_commands(self, commands: np.ndarray) -> None:
-        commands = np.asarray(commands, dtype=np.float64).reshape(len(self.runtime), 3)
-        if not np.all(np.isfinite(commands)):
-            raise ValueError("HEFT velocity commands must be finite.")
-        self.commands[:] = commands
-
-    def get_observations(self) -> np.ndarray:
-        if len(self._velocity_state) != len(self.runtime):
-            self.reset(reset_env=False)
-        observations: list[np.ndarray] = []
-        for runtime, velocity_state, command, robot_state in zip(
-            self.runtime,
-            self._velocity_state,
-            self.commands,
-            self._read_states(),
-        ):
-            qpos, qvel, root_quat, _root_pos, root_angvel = robot_state
-            self._advance_velocity_reference(velocity_state, command)
-            ref_joint, ref_quat, ref_pos = self._velocity_reference_window(velocity_state)
-            runtime.ref_joint_pos = ref_joint
-            runtime.ref_root_quat = ref_quat
-            runtime.ref_root_pos = ref_pos
-            runtime.ref_idx = 16
-
-            self._push_history(runtime.root_angvel, root_angvel)
-            self._push_history(runtime.projected_gravity, _quat_apply_inv(root_quat, _GRAVITY))
-            self._push_history(runtime.joint_pos, qpos)
-            self._push_history(runtime.joint_vel, qvel)
-            self._push_history(runtime.prev_action, runtime.last_action)
-            runtime.boot_value = max(runtime.boot_value - 1, 0)
-            observation = self._build_observation(runtime, qpos, root_quat)
-            if observation.shape != (HEFT_OBSERVATION_DIM,) or not np.all(np.isfinite(observation)):
-                raise FloatingPointError("Invalid HEFT velocity-command observation.")
-            observations.append(observation)
-        return np.stack(observations, axis=0)
-
-    def _advance_velocity_reference(self, state: _VelocityReferenceState, command: np.ndarray) -> None:
-        dt = 0.02
-        if self.command_smoothing_s <= 0.0:
-            alpha = 1.0
-        else:
-            alpha = 1.0 - np.exp(-dt / self.command_smoothing_s)
-        state.filtered_command += alpha * (command - state.filtered_command)
-        reference_command = state.filtered_command * self.reference_gain
-        speed = float(np.linalg.norm(reference_command[:2]))
-        target_blend = float(np.clip((speed - 0.04) / 0.12, 0.0, 1.0))
-        state.moving_blend += alpha * (target_blend - state.moving_blend)
-        phase_step = float(np.clip(speed / self.nominal_gait_speed, 0.0, 1.75))
-        state.phase = (state.phase + phase_step) % self.gait_frames
-        state.yaw += float(reference_command[2]) * dt
-
-        previous_pos = state.root_pos_history[-1].astype(np.float64)
-        world_velocity = _rotate_xy(state.yaw, reference_command[:2])
-        next_pos = previous_pos.copy()
-        next_pos[:2] += world_velocity * dt
-        next_joint, next_quat, next_z = self._sample_velocity_pose(
-            phase=state.phase,
-            yaw=state.yaw,
-            moving_blend=state.moving_blend,
-        )
-        next_pos[2] = next_z
-        state.root_pos_history[:-1] = state.root_pos_history[1:]
-        state.root_pos_history[-1] = next_pos
-        state.root_quat_history[:-1] = state.root_quat_history[1:]
-        state.root_quat_history[-1] = next_quat
-        state.joint_pos_history[:-1] = state.joint_pos_history[1:]
-        state.joint_pos_history[-1] = next_joint
-
-    def _velocity_reference_window(
-        self,
-        state: _VelocityReferenceState,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        future_joint = []
-        future_quat = []
-        future_pos = []
-        reference_command = state.filtered_command * self.reference_gain
-        phase_step = float(
-            np.clip(np.linalg.norm(reference_command[:2]) / self.nominal_gait_speed, 0.0, 1.75)
-        )
-        pos = state.root_pos_history[-1].astype(np.float64).copy()
-        for step in range(1, 7):
-            yaw = state.yaw + float(reference_command[2]) * 0.02 * step
-            pos = pos.copy()
-            pos[:2] += _rotate_xy(yaw, reference_command[:2]) * 0.02
-            joint, quat, root_z = self._sample_velocity_pose(
-                phase=(state.phase + phase_step * step) % self.gait_frames,
-                yaw=yaw,
-                moving_blend=state.moving_blend,
-            )
-            pos[2] = root_z
-            future_joint.append(joint)
-            future_quat.append(quat)
-            future_pos.append(pos.copy())
-        return (
-            np.concatenate([state.joint_pos_history, np.asarray(future_joint, dtype=np.float32)], axis=0),
-            np.concatenate([state.root_quat_history, np.asarray(future_quat, dtype=np.float32)], axis=0),
-            np.concatenate([state.root_pos_history, np.asarray(future_pos, dtype=np.float32)], axis=0),
-        )
-
-    def _sample_velocity_pose(self, *, phase: float, yaw: float, moving_blend: float):
-        index0 = int(np.floor(phase)) % self.gait_frames
-        index1 = (index0 + 1) % self.gait_frames
-        fraction = float(phase - np.floor(phase))
-        gait_joint = (1.0 - fraction) * self._gait_joint[index0] + fraction * self._gait_joint[index1]
-        gait_z = float((1.0 - fraction) * self._gait_root_z[index0] + fraction * self._gait_root_z[index1])
-        gait_rp = _quat_nlerp(self._gait_root_rp[index0], self._gait_root_rp[index1], fraction)
-        yaw_quat = np.asarray([np.cos(0.5 * yaw), 0.0, 0.0, np.sin(0.5 * yaw)], dtype=np.float64)
-        gait_quat = _quat_mul(yaw_quat, gait_rp)
-        joint = (1.0 - moving_blend) * HEFT_DEFAULT_QPOS + moving_blend * gait_joint
-        quat = _quat_nlerp(yaw_quat, gait_quat, moving_blend)
-        root_z = (1.0 - moving_blend) * 0.78 + moving_blend * gait_z
-        return joint.astype(np.float32), quat.astype(np.float32), float(root_z)
-
 
 class HeftG1RecordedCommandBridge(HeftG1OrcaPlayBridge):
     """Select file-backed motion captured from the original G1 velocity policy."""
 
-    _STAND_MOTION = "g1_mjlab_stand"
+    _STAND_MOTION = "heft_stand"
     _COMMAND_MOTIONS = {
-        "w": "g1_mjlab_w_forward",
-        "s": "g1_mjlab_s_backward",
-        "a": "g1_mjlab_a_left",
-        "d": "g1_mjlab_d_right",
-        "z": "g1_mjlab_z_yaw_left",
-        "c": "g1_mjlab_c_yaw_right",
+        "w": "heft_forward",
+        "s": "heft_backward",
+        "a": "heft_left",
+        "d": "heft_right",
+        "z": "heft_yaw_left",
+        "c": "heft_yaw_right",
     }
     _WALK_MOTIONS = {
         "f1": "walk1_subject1",
@@ -888,211 +671,6 @@ class HeftG1RecordedCommandBridge(HeftG1OrcaPlayBridge):
         return self._COMMAND_MOTIONS[key]
 
 
-@dataclass
-class _TeacherCaptureState:
-    joint_pos: np.ndarray
-    root_quat: np.ndarray
-    root_pos: np.ndarray
-    teacher_origin: np.ndarray
-    follower_origin: np.ndarray
-    yaw_delta: np.ndarray
-
-
-class HeftG1TeacherCaptureBridge(HeftG1OrcaPlayBridge):
-    """Track online motion captured from a handless 29-DoF velocity teacher."""
-
-    _PAST_FRAMES = 17
-    _FUTURE_FRAMES = 6
-    _WINDOW_FRAMES = _PAST_FRAMES + _FUTURE_FRAMES
-
-    def __init__(
-        self,
-        env: Any,
-        *,
-        policy_path: str | Path,
-        teacher_env: Any,
-        teacher_policy: Any,
-        teacher_bridge: Any,
-        command_smoothing_s: float = 0.15,
-        onnx_threads: int = 4,
-    ) -> None:
-        super().__init__(
-            env,
-            policy_path=policy_path,
-            motion_dir=None,
-            transition_steps=0,
-            onnx_threads=onnx_threads,
-        )
-        if int(teacher_env.num_envs) != len(self.runtime):
-            raise ValueError(
-                "HEFT teacher/follower environment count mismatch: "
-                f"teacher={teacher_env.num_envs}, follower={len(self.runtime)}"
-            )
-        self.teacher_env = teacher_env
-        self.teacher_policy = teacher_policy
-        self.teacher_bridge = teacher_bridge
-        self.command_smoothing_s = max(0.0, float(command_smoothing_s))
-        self.commands = np.zeros((len(self.runtime), 3), dtype=np.float64)
-        self.filtered_commands = np.zeros_like(self.commands)
-        self._teacher_env_to_heft: list[np.ndarray] = []
-        for task in teacher_env.tasks:
-            names = list(task.robot_config.get("leg_joint_names") or ())
-            if len(names) != 29 or set(names) != set(HEFT_JOINT_NAMES):
-                raise ValueError("The handless G1 teacher does not expose the HEFT 29-DoF joint set.")
-            self._teacher_env_to_heft.append(
-                np.asarray([names.index(name) for name in HEFT_JOINT_NAMES], dtype=np.int64)
-            )
-        self._capture_state: list[_TeacherCaptureState] = []
-        self.current_motion = "mjlab_teacher_capture"
-
-    def reset(self, motion_name: str | None = None, *, reset_env: bool = True) -> None:
-        del motion_name
-        if reset_env:
-            self.env.reset()
-        self.teacher_env.reset()
-        self.commands.fill(0.0)
-        self.filtered_commands.fill(0.0)
-        for runtime in self.runtime:
-            runtime.reset_history()
-
-        follower_states = self._read_states()
-        teacher_states = self._read_teacher_states()
-        self._capture_state = []
-        for follower, teacher in zip(follower_states, teacher_states):
-            follower_root_quat = follower[2]
-            follower_root_pos = follower[3]
-            teacher_joint, teacher_root_quat, teacher_root_pos = teacher
-            yaw_delta = _quat_mul(
-                _yaw_quat(follower_root_quat),
-                _quat_conjugate(_yaw_quat(teacher_root_quat)),
-            )
-            aligned_joint, aligned_quat, aligned_pos = self._align_teacher_frame(
-                teacher_joint,
-                teacher_root_quat,
-                teacher_root_pos,
-                teacher_origin=teacher_root_pos,
-                follower_origin=follower_root_pos,
-                yaw_delta=yaw_delta,
-            )
-            self._capture_state.append(
-                _TeacherCaptureState(
-                    joint_pos=np.repeat(
-                        aligned_joint.reshape(1, 29), self._WINDOW_FRAMES, axis=0
-                    ).astype(np.float32),
-                    root_quat=np.repeat(
-                        aligned_quat.reshape(1, 4), self._WINDOW_FRAMES, axis=0
-                    ).astype(np.float32),
-                    root_pos=np.repeat(
-                        aligned_pos.reshape(1, 3), self._WINDOW_FRAMES, axis=0
-                    ).astype(np.float32),
-                    teacher_origin=teacher_root_pos.astype(np.float64),
-                    follower_origin=follower_root_pos.astype(np.float64),
-                    yaw_delta=np.asarray(yaw_delta, dtype=np.float64),
-                )
-            )
-
-        # Keep six already-simulated teacher frames ahead of the reference
-        # cursor.  This gives HEFT real joint targets for all positive offsets.
-        for _ in range(self._FUTURE_FRAMES):
-            self._step_and_capture_teacher()
-        self.current_motion = "mjlab_teacher_capture"
-
-    def set_commands(self, commands: np.ndarray) -> None:
-        commands = np.asarray(commands, dtype=np.float64).reshape(len(self.runtime), 3)
-        if not np.all(np.isfinite(commands)):
-            raise ValueError("HEFT teacher velocity commands must be finite.")
-        self.commands[:] = commands
-
-    def get_observations(self) -> np.ndarray:
-        if len(self._capture_state) != len(self.runtime):
-            self.reset(reset_env=False)
-        self._step_and_capture_teacher()
-        observations: list[np.ndarray] = []
-        for runtime, capture, follower_state in zip(
-            self.runtime,
-            self._capture_state,
-            self._read_states(),
-        ):
-            qpos, qvel, root_quat, _root_pos, root_angvel = follower_state
-            runtime.ref_joint_pos = capture.joint_pos
-            runtime.ref_root_quat = capture.root_quat
-            runtime.ref_root_pos = capture.root_pos
-            runtime.ref_idx = self._PAST_FRAMES - 1
-            self._push_history(runtime.root_angvel, root_angvel)
-            self._push_history(runtime.projected_gravity, _quat_apply_inv(root_quat, _GRAVITY))
-            self._push_history(runtime.joint_pos, qpos)
-            self._push_history(runtime.joint_vel, qvel)
-            self._push_history(runtime.prev_action, runtime.last_action)
-            runtime.boot_value = max(runtime.boot_value - 1, 0)
-            observation = self._build_observation(runtime, qpos, root_quat)
-            if observation.shape != (HEFT_OBSERVATION_DIM,) or not np.all(np.isfinite(observation)):
-                raise FloatingPointError("Invalid HEFT teacher-capture observation.")
-            observations.append(observation)
-        return np.stack(observations, axis=0)
-
-    def _step_and_capture_teacher(self) -> None:
-        dt = 0.02
-        alpha = 1.0 if self.command_smoothing_s <= 0.0 else 1.0 - np.exp(-dt / self.command_smoothing_s)
-        self.filtered_commands += alpha * (self.commands - self.filtered_commands)
-        start = 0
-        for task in self.teacher_env.tasks:
-            stop = start + int(task.num_envs)
-            task.set_manual_commands(self.filtered_commands[start:stop])
-            start = stop
-        observations = self.teacher_bridge.get_observations()
-        actions = self.teacher_policy.act_numpy(observations, device="cpu")
-        self.teacher_bridge.step(actions)
-        for capture, teacher_frame in zip(self._capture_state, self._read_teacher_states()):
-            joint, quat, pos = self._align_teacher_frame(
-                *teacher_frame,
-                teacher_origin=capture.teacher_origin,
-                follower_origin=capture.follower_origin,
-                yaw_delta=capture.yaw_delta,
-            )
-            capture.joint_pos[:-1] = capture.joint_pos[1:]
-            capture.joint_pos[-1] = joint
-            capture.root_quat[:-1] = capture.root_quat[1:]
-            capture.root_quat[-1] = quat
-            capture.root_pos[:-1] = capture.root_pos[1:]
-            capture.root_pos[-1] = pos
-
-    def _read_teacher_states(self) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-        states: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
-        for task_index, task in enumerate(self.teacher_env.tasks):
-            reorder = self._teacher_env_to_heft[task_index]
-            for local_index, agent in enumerate(task.agents):
-                base_qpos = task.data.qpos[task._base_qpos_indices[local_index]].copy()
-                joint_pos = task.data.qpos[agent.leg_qpos_indices].copy()[reorder]
-                states.append(
-                    (
-                        joint_pos.astype(np.float32),
-                        _quat_normalize(base_qpos[3:7]).astype(np.float32),
-                        base_qpos[:3].astype(np.float32),
-                    )
-                )
-        return states
-
-    @staticmethod
-    def _align_teacher_frame(
-        joint_pos: np.ndarray,
-        root_quat: np.ndarray,
-        root_pos: np.ndarray,
-        *,
-        teacher_origin: np.ndarray,
-        follower_origin: np.ndarray,
-        yaw_delta: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        relative_pos = np.asarray(root_pos, dtype=np.float64) - np.asarray(teacher_origin, dtype=np.float64)
-        aligned_pos = _quat_apply(yaw_delta, relative_pos) + np.asarray(follower_origin, dtype=np.float64)
-        # Reference height is absolute in HEFT and should come from the teacher.
-        aligned_pos[2] = float(root_pos[2])
-        aligned_quat = _quat_mul(yaw_delta, root_quat)
-        return (
-            np.asarray(joint_pos, dtype=np.float32),
-            np.asarray(aligned_quat, dtype=np.float32),
-            np.asarray(aligned_pos, dtype=np.float32),
-        )
-
 
 _GRAVITY = np.asarray([0.0, 0.0, -1.0], dtype=np.float32)
 
@@ -1143,27 +721,6 @@ def _yaw_quat(quat: np.ndarray) -> np.ndarray:
     return np.asarray([np.cos(0.5 * yaw), 0.0, 0.0, np.sin(0.5 * yaw)], dtype=np.float64)
 
 
-def _yaw_angle(quat: np.ndarray) -> float:
-    yaw_quat = _yaw_quat(quat)
-    return float(2.0 * np.arctan2(yaw_quat[3], yaw_quat[0]))
-
-
-def _rotate_xy(yaw: float, vector: np.ndarray) -> np.ndarray:
-    x, y = np.asarray(vector, dtype=np.float64)
-    cosine = np.cos(yaw)
-    sine = np.sin(yaw)
-    return np.asarray([cosine * x - sine * y, sine * x + cosine * y], dtype=np.float64)
-
-
-def _quat_nlerp(start: np.ndarray, stop: np.ndarray, fraction: float) -> np.ndarray:
-    start = _quat_normalize(start)
-    stop = _quat_normalize(stop)
-    if float(np.dot(start, stop)) < 0.0:
-        stop = -stop
-    result = (1.0 - float(fraction)) * start + float(fraction) * stop
-    return _quat_normalize(result)
-
-
 def _quat_to_matrix(quat: np.ndarray) -> np.ndarray:
     quat = np.asarray(quat, dtype=np.float64)
     quat = quat / np.maximum(np.linalg.norm(quat, axis=-1, keepdims=True), 1.0e-9)
@@ -1207,8 +764,6 @@ __all__ = [
     "HEFT_OBSERVATION_DIM",
     "HeftG1OrcaPlayBridge",
     "HeftG1RecordedCommandBridge",
-    "HeftG1TeacherCaptureBridge",
-    "HeftG1VelocityCommandBridge",
     "HeftMotionLibrary",
     "HeftOnnxPolicy",
 ]

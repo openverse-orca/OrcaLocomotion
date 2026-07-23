@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from orca_rl.rsl_env.scene_binding import G1_AGENT_ASSET_PATH
 from orca_rl.tasks.velocity.config_types import LocomotionEnvCfg, UniformVelocityCommandCfg
-from orca_rl.tasks.velocity.velocity_env_cfg import make_flat_velocity_env_cfg, make_rough_velocity_env_cfg
+from orca_rl.tasks.velocity.velocity_env_cfg import make_flat_velocity_env_cfg
 
+
+G1_AGENT_ASSET_PATH = "assets/13951baeb514b4b9/default_project/prefabs/g1_pick_usda"
 
 G1_MAX_DELTA = (
     0.45,
@@ -43,12 +44,7 @@ def _apply_g1_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> LocomotionE
         "resolver": "g1",
         "min_count": 1,
         "max_count": 1,
-        "spawn_if_missing": False,
-        "max_auto_spawn_count": 1,
-        "spawn_agent_name": "g1_000",
         "asset_path": G1_AGENT_ASSET_PATH,
-        "local_xml_path": "auto",
-        "local_clone_spacing": 2.0,
     }
     cfg.observation_scales["height_scale"] = 2.0
     cfg.reset.update({"xy_noise": 0.03, "yaw_noise": 0.15, "joint_noise": 0.02})
@@ -70,12 +66,11 @@ def _apply_g1_common_overrides(cfg: LocomotionEnvCfg, play: bool) -> LocomotionE
 
 
 def unitree_g1_flat_env_cfg(play: bool = False) -> LocomotionEnvCfg:
-    """Create Unitree G1 flat velocity configuration for Orca RSL-RL."""
+    """Create the G1 environment configuration used by HEFT playback."""
 
     cfg = make_flat_velocity_env_cfg(
         name="g1_flat_velocity",
         robot="g1",
-        rsl_rl_config="orca_rl/tasks/velocity/config/g1/rl_cfg.py",
         seed=11,
         time_step=0.001,
         frame_skip=20,
@@ -106,46 +101,6 @@ def unitree_g1_flat_env_cfg(play: bool = False) -> LocomotionEnvCfg:
         },
     )
 
-    return _apply_g1_common_overrides(cfg, play)
-
-
-def unitree_g1_rough_env_cfg(play: bool = False) -> LocomotionEnvCfg:
-    """Create Unitree G1 rough-terrain velocity configuration for Orca RSL-RL."""
-
-    cfg = make_rough_velocity_env_cfg(
-        name="g1_rough_velocity",
-        robot="g1",
-        rsl_rl_config="orca_rl/tasks/velocity/config/g1/rl_cfg.py:unitree_g1_rough_ppo_runner_cfg",
-        seed=13,
-        time_step=0.001,
-        frame_skip=20,
-        decimation=1,
-        render_mode="none",
-        action_safety_scale=0.72,
-        action_max_delta=G1_MAX_DELTA,
-        command_ranges=UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.0),
-            lin_vel_y=(-0.15, 0.15),
-            ang_vel_z=(-0.7, 0.7),
-        ),
-        base_height=0.78,
-        min_base_height=0.48,
-        max_base_height=1.12,
-        max_tilt_rad=0.80,
-        reward_scales={
-            "track_linear_velocity": 1.1,
-            "track_angular_velocity": 0.7,
-            "z_velocity_l2": -1.0,
-            "orientation_l2": -3.5,
-            "base_height_l2": -1.5,
-            "torques_l2": -0.000006,
-            "action_rate_l2": -0.02,
-            "joint_pos_limits": -1.0,
-            "feet_slip": -0.10,
-            "termination": -3.0,
-        },
-    )
-    cfg.train["num_learning_iterations"] = 30_000
     return _apply_g1_common_overrides(cfg, play)
 
 

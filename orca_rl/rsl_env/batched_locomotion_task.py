@@ -19,7 +19,6 @@ from .rendering import resolve_rendering
 from .reward_manager import FlatVelocityReward, RewardConfig
 from .terrain_runtime import TerrainRuntime
 from .termination_manager import TerminationConfig, TerminationManager
-from .mjwarp_runtime import MjWarpRuntime
 from .mujoco_model_settings import apply_unitree_play_global_settings
 
 
@@ -108,8 +107,6 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self._is_subenv = self._headless
         self._sync_render = bool(sim_cfg.get("sync_render", False))
         self.env_id = env_id
-        self._sim_backend = str(sim_cfg.get("backend", "orca_cpu")).strip().lower()
-        self._mjwarp_runtime: MjWarpRuntime | None = None
         self.decimation = int(sim_cfg.get("decimation", 4))
         self.control_dt = float(sim_cfg["time_step"]) * int(sim_cfg["frame_skip"]) * self.decimation
         self.max_episode_length = int(round(float(cfg["episode"]["length_s"]) / self.control_dt))
@@ -136,21 +133,6 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         initial_ctrl = np.asarray(getattr(self.data, "ctrl", np.zeros(self.nu)), dtype=np.float64).reshape(-1)
         self.ctrl = initial_ctrl.copy() if initial_ctrl.size == self.nu else np.zeros(self.nu, dtype=np.float64)
         self._configure_passive_g1_hands()
-        if self._sim_backend == "mjwarp":
-            self._mjwarp_runtime = MjWarpRuntime(
-                model=self.gym._mjModel,
-                data=self.gym._mjData,
-                device=str(sim_cfg.get("mjwarp_device") or cfg.get("device", "cuda:0")),
-                nconmax=sim_cfg.get("mjwarp_nconmax"),
-                njmax=sim_cfg.get("mjwarp_njmax"),
-            )
-            info = self._mjwarp_runtime.info
-            print(
-                "[orca_rl.mjwarp] enabled "
-                f"device={info.device} nworld={info.nworld} qpos={info.qpos_shape} ctrl={info.ctrl_shape}"
-            )
-        elif self._sim_backend not in {"", "orca_cpu", "cpu", "mujoco"}:
-            raise ValueError(f"Unknown sim.backend: {self._sim_backend!r}")
         self._setup_global_randomization_targets()
         local_terrain_cfg = self.robot_config.get("local_terrain_cfg")
         self._shared_terrain_runtime = (
@@ -248,17 +230,10 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
 
         self.prepare_control_buffer()
         self.ctrl[self._flat_actuator_ids] = torque.reshape(-1)
-        if self._mjwarp_runtime is not None:
-            for _ in range(self.decimation):
-                self._mjwarp_runtime.set_ctrl(self.ctrl)
-                self._mjwarp_runtime.step(nstep=self.frame_skip)
-            self._mjwarp_runtime.sync_to_cpu(self.gym._mjData, recompute_contacts=True)
-            self.update_data()
-        else:
-            for _ in range(self.decimation):
-                self.set_ctrl(self.ctrl)
-                self.mj_step(nstep=self.frame_skip)
-            self.update_data()
+        for _ in range(self.decimation):
+            self.set_ctrl(self.ctrl)
+            self.mj_step(nstep=self.frame_skip)
+        self.update_data()
         if self._render_mode == "human":
             self.render()
 
@@ -359,16 +334,9 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self._reset_passive_g1_hands()
         self._apply_global_randomization(self.agents[int(indices[0])].randomization_state)
         self.prepare_control_buffer()
-        if self._mjwarp_runtime is not None:
-            self.set_ctrl(self.ctrl)
-            self._mjwarp_runtime.sync_from_cpu(self.gym._mjData)
-            self._mjwarp_runtime.forward()
-            self._mjwarp_runtime.sync_to_cpu(self.gym._mjData, recompute_contacts=True)
-            self.update_data()
-        else:
-            self.set_ctrl(self.ctrl)
-            self.mj_forward()
-            self.update_data()
+        self.set_ctrl(self.ctrl)
+        self.mj_forward()
+        self.update_data()
         if self._render_mode == "human":
             self.render()
 
@@ -747,13 +715,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         )
 
     def _query_height_scan(self, agent: _AgentRuntime, base_pos: np.ndarray, base_quat: np.ndarray) -> np.ndarray:
-        """Return mjlab-style vertical height scan from the live MuJoCo scene.
-
-        The rough Unitree/mjlab policies were trained from raycast hits, not from
-        an offline terrain table.  Prefer real MuJoCo raycasts so OrcaLab visual
-        or uploaded terrain geometry is the source of truth.  If a ray misses,
-        fall back to the configured heightfield for that sample.
-        """
+        """Return a vertical height scan from the live MuJoCo scene."""
 
         scan_cfg = agent.terrain_runtime.scan_cfg
         if not scan_cfg.enabled:
@@ -762,7 +724,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         fallback_scaled = agent.terrain_runtime.scan(base_pos, base_quat)
         model = getattr(getattr(self, "gym", None), "_mjModel", None)
         data = getattr(getattr(self, "gym", None), "_mjData", None)
-        if model is None or data is None or getattr(self, "_mjwarp_runtime", None) is not None:
+        if model is None or data is None:
             return fallback_scaled
         fallback = fallback_scaled / scale if abs(scale) > 1.0e-12 else fallback_scaled
 
@@ -1141,14 +1103,8 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
             data.qvel[agent.base_qvel_offset + 5] += agent.rng.uniform(yaw_low, yaw_high)
             any_push = True
         if any_push:
-            if self._mjwarp_runtime is not None:
-                self._mjwarp_runtime.sync_from_cpu(data)
-                self._mjwarp_runtime.forward()
-                self._mjwarp_runtime.sync_to_cpu(data, recompute_contacts=True)
-                self.update_data()
-            else:
-                self.mj_forward()
-                self.update_data()
+            self.mj_forward()
+            self.update_data()
 
     def _push_interval_steps(self) -> int:
         interval_s = float(self.cfg.get("randomization", {}).get("push_interval_s", 0.0))

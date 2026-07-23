@@ -164,7 +164,6 @@ class JointPositionActionCfg(TermCfg):
 class LocomotionEnvCfg:
     name: str
     robot: str
-    rsl_rl_config: str
     num_envs: int = 1
     device: str = "cuda:0"
     orcagym_addresses: tuple[str, ...] = ("localhost:50051",)
@@ -186,10 +185,6 @@ class LocomotionEnvCfg:
     randomization: dict[str, Any] = field(default_factory=dict)
     curriculum: dict[str, TermCfg] = field(default_factory=dict)
     metrics: dict[str, TermCfg] = field(default_factory=dict)
-    train: dict[str, Any] = field(default_factory=dict)
-    play: dict[str, Any] = field(default_factory=dict)
-    eval: dict[str, Any] = field(default_factory=dict)
-    export: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -198,7 +193,6 @@ class LocomotionEnvCfg:
             "num_envs": self.num_envs,
             "device": self.device,
             "orcagym_addresses": list(self.orcagym_addresses),
-            "rsl_rl_config": self.rsl_rl_config,
             "seed": self.seed,
             "sim": self.sim,
             "terrain": _metadata_value(self.terrain),
@@ -215,10 +209,6 @@ class LocomotionEnvCfg:
             "randomization": self.randomization,
             "curriculum": {name: term.metadata() for name, term in self.curriculum.items()},
             "metrics": {name: term.metadata() for name, term in self.metrics.items()},
-            "train": self.train,
-            "play": self.play,
-            "eval": self.eval,
-            "export": self.export,
             "manager_terms": self._manager_metadata(),
         }
 
@@ -286,98 +276,6 @@ class LocomotionEnvCfg:
         }
 
 
-@dataclass
-class RslRlModelCfg:
-    hidden_dims: tuple[int, ...] = (512, 256, 128)
-    activation: str = "elu"
-    obs_normalization: bool = True
-    distribution_cfg: dict[str, Any] | None = None
-    class_name: str = "MLPModel"
-
-    def to_dict(self) -> dict[str, Any]:
-        data: dict[str, Any] = {
-            "class_name": self.class_name,
-            "hidden_dims": list(self.hidden_dims),
-            "activation": self.activation,
-            "obs_normalization": self.obs_normalization,
-        }
-        if self.distribution_cfg is not None:
-            data["distribution_cfg"] = self.distribution_cfg
-        return data
-
-
-@dataclass
-class RslRlPpoAlgorithmCfg:
-    learning_rate: float = 3.0e-4
-    num_learning_epochs: int = 5
-    num_mini_batches: int = 4
-    schedule: str = "adaptive"
-    value_loss_coef: float = 1.0
-    clip_param: float = 0.2
-    use_clipped_value_loss: bool = True
-    desired_kl: float = 0.01
-    entropy_coef: float = 0.01
-    gamma: float = 0.99
-    lam: float = 0.95
-    max_grad_norm: float = 1.0
-    normalize_advantage_per_mini_batch: bool = False
-    class_name: str = "PPO"
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "class_name": self.class_name,
-            "learning_rate": self.learning_rate,
-            "num_learning_epochs": self.num_learning_epochs,
-            "num_mini_batches": self.num_mini_batches,
-            "schedule": self.schedule,
-            "value_loss_coef": self.value_loss_coef,
-            "clip_param": self.clip_param,
-            "use_clipped_value_loss": self.use_clipped_value_loss,
-            "desired_kl": self.desired_kl,
-            "entropy_coef": self.entropy_coef,
-            "gamma": self.gamma,
-            "lam": self.lam,
-            "max_grad_norm": self.max_grad_norm,
-            "normalize_advantage_per_mini_batch": self.normalize_advantage_per_mini_batch,
-            "rnd_cfg": None,
-            "symmetry_cfg": None,
-        }
-
-
-@dataclass
-class RslRlOnPolicyRunnerCfg:
-    actor: RslRlModelCfg
-    critic: RslRlModelCfg
-    algorithm: RslRlPpoAlgorithmCfg
-    experiment_name: str
-    run_name: str
-    save_interval: int = 100
-    num_steps_per_env: int = 24
-    max_iterations: int = 1500
-    logger: str = "tensorboard"
-    wandb_project: str = "orca_locomotion"
-    obs_groups: dict[str, list[str]] = field(
-        default_factory=lambda: {"actor": ["policy"], "critic": ["policy", "privileged"]}
-    )
-    check_for_nan: bool = True
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "runner": {
-                "num_steps_per_env": self.num_steps_per_env,
-                "max_iterations": self.max_iterations,
-                "obs_groups": self.obs_groups,
-                "save_interval": self.save_interval,
-                "logger": self.logger,
-                "wandb_project": self.wandb_project,
-                "experiment_name": self.experiment_name,
-                "run_name": self.run_name,
-                "check_for_nan": self.check_for_nan,
-                "algorithm": self.algorithm.to_dict(),
-                "actor": self.actor.to_dict(),
-                "critic": self.critic.to_dict(),
-            }
-        }
 
 
 def _metadata_value(value: Any) -> Any:

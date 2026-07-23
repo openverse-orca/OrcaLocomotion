@@ -95,10 +95,7 @@ class TerrainRuntime:
             size=self.scan_cfg.size,
             resolution=self.scan_cfg.resolution,
         )
-        # mjlab's height_scan reports frame_z - hit_z before applying the
-        # observation term scale.  Keep the generated terrain backend on the
-        # same sign convention so rough-policy checkpoints do not see slopes
-        # and pits inverted.
+        # Height scans use frame_z - hit_z before applying the observation scale.
         relative_heights = float(base_pos[2]) - terrain_heights
         return (relative_heights * self.scan_cfg.scale).astype(np.float64)
 

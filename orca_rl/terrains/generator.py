@@ -67,7 +67,7 @@ class HeightField:
         cos_yaw = float(np.cos(yaw))
         sin_yaw = float(np.sin(yaw))
         samples: list[float] = []
-        # Match mjlab GridPatternCfg ordering:
+        # Keep a stable row-major grid ordering:
         # torch.meshgrid(x, y, indexing="xy"), then row-major flatten.
         # That means y is the outer axis and x changes fastest.
         for y in ys:

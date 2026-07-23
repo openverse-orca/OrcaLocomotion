@@ -1,30 +1,5 @@
-"""Built-in velocity task configuration factories."""
+"""HEFT G1 runtime configuration."""
 
-from __future__ import annotations
+from .g1 import unitree_g1_flat_env_cfg
 
-from .g1 import (
-    unitree_g1_flat_env_cfg,
-    unitree_g1_ppo_runner_cfg,
-    unitree_g1_rough_env_cfg,
-    unitree_g1_rough_ppo_runner_cfg,
-)
-from .go2 import (
-    unitree_go2_flat_env_cfg,
-    unitree_go2_ppo_runner_cfg,
-    unitree_go2_rough_env_cfg,
-    unitree_go2_rough_ppo_runner_cfg,
-)
-from .lite3 import deeprobotics_lite3_flat_env_cfg, deeprobotics_lite3_flat_ppo_runner_cfg
-
-__all__ = [
-    "unitree_g1_flat_env_cfg",
-    "unitree_g1_ppo_runner_cfg",
-    "unitree_g1_rough_env_cfg",
-    "unitree_g1_rough_ppo_runner_cfg",
-    "unitree_go2_flat_env_cfg",
-    "unitree_go2_ppo_runner_cfg",
-    "unitree_go2_rough_env_cfg",
-    "unitree_go2_rough_ppo_runner_cfg",
-    "deeprobotics_lite3_flat_env_cfg",
-    "deeprobotics_lite3_flat_ppo_runner_cfg",
-]
+__all__ = ["unitree_g1_flat_env_cfg"]

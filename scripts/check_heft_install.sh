@@ -22,7 +22,7 @@ if [[ "${1:-}" == "--runtime" ]]; then
 import importlib
 import importlib.util
 
-required = ("mujoco", "numpy", "onnxruntime", "orca_gym", "torch")
+required = ("mujoco", "numpy", "onnxruntime", "orca_gym")
 missing = []
 for name in required:
     try:
@@ -34,6 +34,7 @@ if importlib.util.find_spec("pynput") is None:
 if missing:
     raise SystemExit("Missing or broken HEFT runtime dependencies:\n  " + "\n  ".join(missing))
 PY
+  "${PYTHON_BIN}" "${ROOT_DIR}/scripts/smoke_test_heft.py"
 fi
 
 echo "[HEFT check] Assets${1:+ and runtime dependencies} are ready."
