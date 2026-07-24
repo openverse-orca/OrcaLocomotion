@@ -44,6 +44,7 @@ Orca GPU Runtime
 | `managers` / `mdp` | command、observation、reward、event、termination 与 action term |
 | `robots` / `assets` | 机器人定义、默认姿态及仓库内置训练资产 |
 | `rslrl` | 将 Orca 环境适配为 RSL-RL 向量环境 |
+| `rsl_rl` | 仓库内置的 RSL-RL 5.0.1：PPO、rollout storage 与 PyTorch 网络模块 |
 | `recording` | 记录明确启用的运行数据 |
 | `tools` | 性能检查和开发诊断工具 |
 

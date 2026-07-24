@@ -23,6 +23,13 @@ flowchart TB
 - GPU 并行训练、检查、性能测试和回放均通过 `orcarl` CLI。
 - 同一 checkpoint 支持 headless 批量回放和 OrcaLab 实时可视化。
 
+## RSL-RL 源码
+
+本仓库直接包含 RSL-RL 5.0.1 的源码，位于 [`rsl_rl/`](rsl_rl/)。因此可直接修改
+PPO、rollout storage 与 PyTorch 网络模块，而无需依赖安装在环境中的 `rsl-rl-lib`。
+上游 RSL-RL 采用 BSD-3-Clause 许可证；许可证文本见
+[`LICENSE.rsl_rl`](LICENSE.rsl_rl)。
+
 | 任务 | 机器人 | 训练与回放 |
 | --- | --- | --- |
 | `G1-Velocity-Flat` | Unitree G1 29DoF | GPU 并行 RSL-RL / Headless / OrcaLab |
