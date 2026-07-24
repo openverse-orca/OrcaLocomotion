@@ -148,5 +148,3 @@ MDP term 通过 `env.orca` 读取批量状态，例如 `env.orca.state.qpos`、
   url = {https://github.com/openverse-orca/OrcaLocomotion/tree/orca_warp}
 }
 ```
-
-完整的引用元数据见 [`CITATION.cff`](CITATION.cff)。
