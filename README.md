@@ -64,17 +64,19 @@ SSH/无全局键盘权限时使用：
 兼容入口 `./play_g1_heft_velocity.sh` 保留。完整部署与排障见
 [`docs/HEFT_DEX3.md`](docs/HEFT_DEX3.md)。
 
-## 校验与来源
+## Citation
 
-```bash
-./scripts/check_heft_install.sh --runtime
+This runtime package is based on [HEFT](https://arxiv.org/abs/2607.02332).
+If you use it in academic work, please cite:
+
+```bibtex
+@misc{liu2026heftheavypayloadfullsizehumanoid,
+  title={HEFT: Heavy-Payload Full-size Humanoid Teleoperation with Privileged Motion Guidance and Windowed Payload Curriculum},
+  author={Chenxin Liu and Qingzhou Lu and Guangxiao Yang and Xuanyang Shi and Chenghan Yang and Yanjiang Guo and Jianyu Chen},
+  year={2026},
+  eprint={2607.02332},
+  archivePrefix={arXiv},
+  primaryClass={cs.RO},
+  url={https://arxiv.org/abs/2607.02332},
+}
 ```
-
-所有发布资产都有 SHA-256 校验。
-
-## HEFT 引用
-
-本运行包内的 G1 PMG 策略和 `walk1/walk2/walk3` 动作源自
-[Axellwppr/motion_tracking](https://github.com/Axellwppr/motion_tracking) 的 `sim2real` 分支，
-固定版本为 [`0d5ba31e33397f3543d350d98b637e26d92f470a`](https://github.com/Axellwppr/motion_tracking/commit/0d5ba31e33397f3543d350d98b637e26d92f470a)，
-按 MIT License 使用；Copyright (c) 2026 Axell。
