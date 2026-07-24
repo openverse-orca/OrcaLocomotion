@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use OrcaLocomotion · Orca Warp in academic work, please cite it as below."
+type: software
+title: "OrcaLocomotion: Orca Warp"
+authors:
+  - family-names: Hu
+    given-names: Huan
+repository-code: "https://github.com/openverse-orca/OrcaLocomotion/tree/orca_warp"
+url: "https://github.com/openverse-orca/OrcaLocomotion/tree/orca_warp"

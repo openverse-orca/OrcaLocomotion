@@ -128,3 +128,18 @@ finally:
 
 MDP term 通过 `env.orca` 读取批量状态，例如 `env.orca.state.qpos`、
 `env.orca.joint_qvel()` 和 `env.orca.sensor(name)`；不要导入 `_internal` 模块。
+
+## 引用
+
+如果本项目对你的研究有帮助，请引用：
+
+```bibtex
+@software{hu_orcalocomotion_orca_warp,
+  author = {Huan Hu},
+  title = {OrcaLocomotion: Orca Warp},
+  year = {2026},
+  url = {https://github.com/openverse-orca/OrcaLocomotion/tree/orca_warp}
+}
+```
+
+完整的引用元数据见 [`CITATION.cff`](CITATION.cff)。
