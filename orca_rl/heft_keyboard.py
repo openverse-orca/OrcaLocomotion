@@ -17,6 +17,7 @@ class KeyboardState:
     reset_requested: bool
     quit_requested: bool
     motion_selection: str | None = None
+    hand_command: str | None = None
 
 
 class KeyboardBackend(Protocol):
@@ -56,15 +57,18 @@ class TerminalKeyboardBackend:
         yaw_speed: float,
         max_speed: float,
         enable_motion_selection: bool,
+        enable_hand_control: bool,
     ) -> None:
         self.command = _as_command(initial_command)
         self.command_speed = float(command_speed)
         self.yaw_speed = float(yaw_speed)
         self.max_speed = float(max_speed)
         self.enable_motion_selection = bool(enable_motion_selection)
+        self.enable_hand_control = bool(enable_hand_control)
         self.quit_requested = False
         self.reset_requested = False
         self.motion_selection: str | None = None
+        self.hand_command: str | None = None
         self._old_settings = None
 
     def __enter__(self) -> "TerminalKeyboardBackend":
@@ -90,6 +94,10 @@ class TerminalKeyboardBackend:
         elif self.enable_motion_selection and key in {"f1", "f2", "f3"}:
             self.command[:] = 0.0
             self.motion_selection = key
+        elif self.enable_hand_control and key in {"o", "O"}:
+            self.hand_command = "open"
+        elif self.enable_hand_control and key in {"c", "C"}:
+            self.hand_command = "closed"
         elif key in {" ", "space", "5"}:
             self.command[:] = 0.0
             self.motion_selection = "stand"
@@ -106,9 +114,11 @@ class TerminalKeyboardBackend:
             self.reset_requested,
             self.quit_requested,
             self.motion_selection,
+            self.hand_command,
         )
         self.reset_requested = False
         self.motion_selection = None
+        self.hand_command = None
         return state
 
 
@@ -123,15 +133,18 @@ class GlobalKeyboardBackend:
         yaw_speed: float,
         max_speed: float,
         enable_motion_selection: bool,
+        enable_hand_control: bool,
     ) -> None:
         self.command = _as_command(initial_command)
         self.command_speed = float(command_speed)
         self.yaw_speed = float(yaw_speed)
         self.max_speed = float(max_speed)
         self.enable_motion_selection = bool(enable_motion_selection)
+        self.enable_hand_control = bool(enable_hand_control)
         self.quit_requested = False
         self.reset_requested = False
         self.motion_selection: str | None = None
+        self.hand_command: str | None = None
         self._active_keys: set[str] = set()
         self._lock = threading.Lock()
         self._listener = None
@@ -156,9 +169,11 @@ class GlobalKeyboardBackend:
                 self.reset_requested,
                 self.quit_requested,
                 self.motion_selection,
+                self.hand_command,
             )
             self.reset_requested = False
             self.motion_selection = None
+            self.hand_command = None
             return state
 
     def _on_press(self, key) -> None:
@@ -179,6 +194,10 @@ class GlobalKeyboardBackend:
                 self._active_keys.clear()
                 self.command[:] = 0.0
                 self.motion_selection = name
+            elif self.enable_hand_control and name in {"o", "O"}:
+                self.hand_command = "open"
+            elif self.enable_hand_control and name in {"c", "C"}:
+                self.hand_command = "closed"
             elif name in _DIRECTION_KEYS:
                 self._active_keys.add(name)
                 self._update_command()
@@ -231,12 +250,14 @@ def make_keyboard_backend(
     command_speed: float,
     yaw_speed: float,
     max_speed: float,
+    enable_hand_control: bool = False,
 ) -> KeyboardBackend:
     kwargs = {
         "command_speed": command_speed,
         "yaw_speed": yaw_speed,
         "max_speed": max_speed,
         "enable_motion_selection": True,
+        "enable_hand_control": bool(enable_hand_control),
     }
     if backend == "none":
         return NoKeyboardBackend(initial_command)

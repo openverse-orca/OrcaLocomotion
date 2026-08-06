@@ -335,6 +335,73 @@ class HeftG1OrcaPlayBridge:
             runtime.reset_history()
         self.set_motion(selected)
 
+    def reset_online(self, *, reset_env: bool = True, horizon: int = 7) -> None:
+        """Reset the policy for a live reference stream without a motion file.
+
+        The initial reference is the current measured robot pose.  Call
+        :meth:`set_online_reference` whenever a new retargeted pose arrives.
+        """
+        if reset_env:
+            self.env.reset()
+        for runtime in self.runtime:
+            runtime.reset_history()
+        states = self._read_states()
+        self.set_online_reference(
+            np.stack([state[0] for state in states], axis=0),
+            root_quat=np.stack([state[2] for state in states], axis=0),
+            root_pos=np.stack([state[3] for state in states], axis=0),
+            horizon=horizon,
+        )
+
+    def set_online_reference(
+        self,
+        joint_pos: np.ndarray,
+        *,
+        root_quat: np.ndarray | None = None,
+        root_pos: np.ndarray | None = None,
+        horizon: int = 7,
+    ) -> None:
+        """Set a constant, short-horizon reference for live teleoperation.
+
+        ``joint_pos`` follows :data:`HEFT_JOINT_NAMES`.  Supplying only a
+        joint target leaves the root at its measured pose, which is the safe
+        mode for upper-body-only teleoperation.
+        """
+        count = len(self.runtime)
+        joints = np.asarray(joint_pos, dtype=np.float32)
+        if joints.shape == (29,):
+            joints = np.repeat(joints.reshape(1, 29), count, axis=0)
+        if joints.shape != (count, 29):
+            raise ValueError(f"online joint_pos must have shape ({count}, 29), got {joints.shape}")
+
+        states = self._read_states()
+        measured_quat = np.stack([state[2] for state in states], axis=0)
+        measured_pos = np.stack([state[3] for state in states], axis=0)
+        quats = measured_quat if root_quat is None else np.asarray(root_quat, dtype=np.float32)
+        positions = measured_pos if root_pos is None else np.asarray(root_pos, dtype=np.float32)
+        if quats.shape == (4,):
+            quats = np.repeat(quats.reshape(1, 4), count, axis=0)
+        if positions.shape == (3,):
+            positions = np.repeat(positions.reshape(1, 3), count, axis=0)
+        if quats.shape != (count, 4) or positions.shape != (count, 3):
+            raise ValueError(
+                "online root reference must have shapes "
+                f"({count}, 4) and ({count}, 3), got {quats.shape} and {positions.shape}"
+            )
+
+        reference_len = max(int(horizon), int(HEFT_FUTURE_STEPS.max()) + 1)
+        for runtime, joints_i, quat_i, pos_i in zip(self.runtime, joints, quats, positions, strict=True):
+            runtime.ref_joint_pos = np.repeat(joints_i.reshape(1, 29), reference_len, axis=0)
+            runtime.ref_root_quat = np.repeat(_quat_normalize(quat_i).reshape(1, 4), reference_len, axis=0)
+            runtime.ref_root_pos = np.repeat(pos_i.reshape(1, 3), reference_len, axis=0)
+            runtime.ref_idx = 0
+            runtime.motion_name = "online"
+        self.current_motion = "online"
+
+    def current_joint_positions(self) -> np.ndarray:
+        """Return measured G1 joints in the fixed HEFT joint ordering."""
+        return np.stack([state[0] for state in self._read_states()], axis=0)
+
     def set_motion(self, motion_name: str) -> None:
         if self.motions is None:
             raise RuntimeError("This HEFT bridge uses an online teacher and has no file-backed motion library.")

@@ -1,7 +1,7 @@
 # HEFT G1 + Dex3-1 部署指南
 
 这套运行包把 HEFT G1 PMG ONNX 策略直接接入 OrcaLab。策略只控制 G1 本体 29 个关节；
-Dex3-1 的 14 个手部 actuator 不进入 observation/action，并在运行时保持被动张开，因而策略 ABI
+Dex3-1 的 14 个手部 actuator 不进入 observation/action，并在运行时由被动弹簧保持目标开合，因而策略 ABI
 始终是 29 维。
 
 ## 环境要求

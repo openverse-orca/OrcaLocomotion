@@ -2,5 +2,7 @@
 numpy==2.2.6
 orca-lab==26.6.3
 mujoco==3.7.0
+viser==1.0.26
+mjviser==0.0.11
 onnxruntime>=1.17.0
 pynput>=1.7.6

@@ -527,12 +527,15 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         return self.ctrl
 
     def _configure_passive_g1_hands(self) -> None:
-        """Disable Dex3 drives and stabilize its otherwise passive light links."""
+        """Disable Dex3 drives and hold the fingers at an operator-selected pose."""
 
         self._passive_hand_actuator_ids = np.zeros(0, dtype=np.int64)
         self._passive_hand_dof_ids = np.zeros(0, dtype=np.int64)
         self._passive_hand_qpos_ids = np.zeros(0, dtype=np.int64)
         self._passive_hand_target_qpos = np.zeros(0, dtype=np.float64)
+        self._passive_hand_open_qpos = np.zeros(0, dtype=np.float64)
+        self._passive_hand_closed_qpos = np.zeros(0, dtype=np.float64)
+        self._passive_hand_pose = "unavailable"
         if str(self.robot_config.get("model_name", "")).lower() != "g1":
             return
 
@@ -543,6 +546,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         dof_ids: list[int] = []
         qpos_ids: list[int] = []
         open_qpos: list[float] = []
+        closed_qpos: list[float] = []
         for actuator_id in range(model.nu):
             actuator_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator_id) or ""
             if "_hand_" not in actuator_name or not actuator_name.startswith(agent_prefixes):
@@ -556,15 +560,13 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
             dof_ids.append(dof_id)
             qpos_ids.append(qpos_id)
             open_qpos.append(self._dex3_open_joint_position(model, joint_id))
+            closed_qpos.append(self._dex3_closed_joint_position(model, joint_id))
             model.actuator_gainprm[actuator_id, :] = 0.0
             model.actuator_biasprm[actuator_id, :] = 0.0
-            open_target = open_qpos[-1]
-            # Keep Dex3 fully open without adding 14 hand actions to the
+            # Keep Dex3 stable without adding 14 hand actions to the
             # locomotion ABI or leaving light finger links free to shake the
-            # wrists.
+            # wrists.  The spring target is switched by ``set_dex3_hand_pose``.
             model.jnt_stiffness[joint_id] = max(float(model.jnt_stiffness[joint_id]), 10.0)
-            if hasattr(model, "qpos_spring"):
-                model.qpos_spring[qpos_id] = open_target
             model.dof_damping[dof_id] = max(float(model.dof_damping[dof_id]), 0.3)
             model.dof_armature[dof_id] = max(float(model.dof_armature[dof_id]), 0.002)
             model.dof_frictionloss[dof_id] = max(float(model.dof_frictionloss[dof_id]), 0.05)
@@ -576,7 +578,15 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         self._passive_hand_actuator_ids = np.asarray(actuator_ids, dtype=np.int64)
         self._passive_hand_dof_ids = np.asarray(dof_ids, dtype=np.int64)
         self._passive_hand_qpos_ids = np.asarray(qpos_ids, dtype=np.int64)
-        self._passive_hand_target_qpos = np.asarray(open_qpos, dtype=np.float64)
+        self._passive_hand_open_qpos = np.asarray(open_qpos, dtype=np.float64)
+        self._passive_hand_closed_qpos = np.asarray(closed_qpos, dtype=np.float64)
+        # For PICO teleoperation, begin with both Dex3-1 hands fully closed.
+        # The player exposes O=open and C=close without changing the 29-D
+        # locomotion policy ABI.
+        self._passive_hand_target_qpos = self._passive_hand_closed_qpos.copy()
+        self._passive_hand_pose = "closed"
+        if hasattr(model, "qpos_spring"):
+            model.qpos_spring[self._passive_hand_qpos_ids] = self._passive_hand_target_qpos
         enabled_hand_contact_geoms = 0
         for geom_id in range(model.ngeom):
             body_name = mujoco.mj_id2name(
@@ -592,7 +602,7 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
         mujoco.mj_setConst(model, data)
         print(
             "[orca_rl.control] G1 Dex3 passive mode: "
-            f"disabled_actuators={len(actuator_ids)}, default_pose=fully_open, "
+            f"disabled_actuators={len(actuator_ids)}, default_pose=fully_closed, "
             f"contact_geoms={enabled_hand_contact_geoms}, spring>=10.0, "
             "damping>=0.3, armature>=0.002, frictionloss>=0.05"
         )
@@ -601,6 +611,42 @@ class BatchedOrcaLocomotionTask(OrcaGymLocalEnv):
     def _dex3_open_joint_position(model: mujoco.MjModel, joint_id: int) -> float:
         low, high = np.asarray(model.jnt_range[joint_id], dtype=np.float64)
         return float(np.clip(0.0, low, high))
+
+    @staticmethod
+    def _dex3_closed_joint_position(model: mujoco.MjModel, joint_id: int) -> float:
+        """Return the Dex3-1 closed limit in its joint's native sign convention."""
+        low, high = np.asarray(model.jnt_range[joint_id], dtype=np.float64)
+        joint_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id) or ""
+        # Dex3 thumb-0 is an abduction joint.  Its fully flexed grasp pose is
+        # neutral rather than either symmetric travel limit; the other joints
+        # close toward the endpoint with the greatest flexion magnitude.
+        if "thumb_0" in joint_name.lower():
+            return float(np.clip(0.0, low, high))
+        return float(low if abs(low) >= abs(high) else high)
+
+    @property
+    def dex3_hand_pose(self) -> str:
+        """Current passive Dex3-1 target: ``closed``, ``open``, or unavailable."""
+        return str(getattr(self, "_passive_hand_pose", "unavailable"))
+
+    def set_dex3_hand_pose(self, pose: str) -> bool:
+        """Select the passive Dex3-1 spring target without adding policy actions."""
+        normalized = str(pose).strip().lower()
+        if normalized not in {"open", "closed"}:
+            raise ValueError("Dex3 hand pose must be 'open' or 'closed'.")
+        if not getattr(self, "_passive_hand_qpos_ids", np.empty(0)).size:
+            return False
+        target = (
+            self._passive_hand_open_qpos
+            if normalized == "open"
+            else self._passive_hand_closed_qpos
+        )
+        self._passive_hand_target_qpos = np.asarray(target, dtype=np.float64).copy()
+        self._passive_hand_pose = normalized
+        model = self.gym._mjModel
+        if hasattr(model, "qpos_spring"):
+            model.qpos_spring[self._passive_hand_qpos_ids] = self._passive_hand_target_qpos
+        return True
 
     def _reset_passive_g1_hands(self) -> None:
         if not getattr(self, "_passive_hand_qpos_ids", np.empty(0)).size:
